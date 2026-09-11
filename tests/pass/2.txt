@@ -1,0 +1,5 @@
+int _var
+int non
+non :=-5
+_var:= 10* non
+exit _var

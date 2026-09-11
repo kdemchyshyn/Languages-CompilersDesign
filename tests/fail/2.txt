@@ -1,0 +1,3 @@
+x:=33
+int x
+exit x

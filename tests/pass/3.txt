@@ -1,0 +1,7 @@
+int x 
+int y
+x := 8
+y := 8
+int z
+z := x+y
+exit z
