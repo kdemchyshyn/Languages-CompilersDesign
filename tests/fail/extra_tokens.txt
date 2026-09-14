@@ -1,0 +1,4 @@
+i32 x {5}
+i32 mut y {6}
+y := x +y dfdf
+exit y

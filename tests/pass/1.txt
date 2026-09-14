@@ -1,4 +1,2 @@
-int x
-x := 10
+i32 x { 42 }
 exit x
-
