@@ -110,21 +110,24 @@ class Parser:
 
     def parse_exitStmt(self):
         tok = self.eat() # Eat "exit"
-        value = self.parse_value()
+        value = self.parse_factor()
         return ExitNode(tok.line, tok.col, value)
 
     def parse_expr(self):
-        left = self.parse_value()
-        
-        tok = self.peek()
-        if tok is not None and tok.kind == "operation":
-            op_tok = self.eat()
-            right = self.parse_value()
-            return BinOpNode(op_tok.line, op_tok.col, op_tok.text, left, right)
-            
-        return left
+        node = self.parse_term()
+        while (tok := self.peek()) is not None and tok.kind == "operation" and tok.text in ("+", "-"):
+            self.eat()
+            node = BinOpNode(tok.line, tok.col, tok.text, node, self.parse_term())
+        return node
 
-    def parse_value(self):
+    def parse_term(self): 
+        node = self.parse_factor()
+        while (tok := self.peek()) is not None and tok.kind == "operation" and tok.text == "*":
+            self.eat()
+            node = BinOpNode(tok.line, tok.col, tok.text, node, self.parse_factor())
+        return node
+
+    def parse_factor(self):
         tok = self.peek()
         if tok is None:
             self.error("expected a constant or a variable, found end of line")

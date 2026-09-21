@@ -1029,20 +1029,394 @@ answer:
 
 prompt:
 {
+    I wanna add chaining like this:
+    i32 x{2 + 3 * 4} 14, not 20
+    i32 mut a{10 - 3 - 2} 5, not 9
+    a := a * 2 - 1 9
+    i32 z{x * a - 6} 120
+    exit z
 
+    so I need to modify parser expretions:
+    from errors import CompileError
+    from nodes import ProgramNode, DeclNode, AssignNode, ExitNode, BinOpNode, VarNode, ConstNode
+
+    class Parser:
+        def __init__(self, lines):
+            # lines is a list of lists of tokens: [[Token, Token], [Token], ...]
+            self.lines = lines
+            self.toks = []
+            self.pos = 0
+            self.current_line_num = 1
+            self.last_col = 1
+
+        def error(self, message):
+            """Raises a CompileError with the line and column of the error."""
+            if self.pos < len(self.toks):
+                tok = self.toks[self.pos]
+                line, col = tok.line, tok.col
+            else:
+                line = self.current_line_num
+                col = self.last_col
+            CompileError(f"line {line}:{col}: {message}")
+
+        def peek(self):
+            return self.toks[self.pos] if self.pos < len(self.toks) else None
+        
+        def eat(self):
+            tok = self.toks[self.pos]
+            self.pos += 1
+            return tok
+        
+        def expect(self, kind, what):
+            tok = self.peek()
+            if tok is None or tok.kind != kind: raise self.error(f"expected {what}")
+            return self.eat()
+        
+        def parse_program(self):
+            stmts = []
+            exit_node = None
+
+            for toks in self.lines:
+                if not toks: 
+                    continue # Skip pure blank lines
+
+                self.toks, self.pos = toks, 0
+                self.current_line_num = toks[0].line
+                # Default end of line column fallback if line fails immediately
+                self.last_col = toks[-1].col + len(toks[-1].text) 
+                
+                if exit_node is not None:
+                    self.error("statement after exit")
+
+                tok = self.peek()
+                if tok.kind == "keyword" and tok.text == "exit":
+                    exit_node = self.parse_exitStmt()
+                else:
+                    stmts.append(self.parse_statement())
+
+                if self.peek() is not None:
+                    self.error(f"unexpected '{self.peek().text}' after the statement")
+
+            if exit_node is None:
+                CompileError(f"line {self.current_line_num}:{self.last_col}: program without exit")
+
+            start_line = stmts[0].line if stmts else exit_node.line
+            start_col = stmts[0].col if stmts else exit_node.col
+            return ProgramNode(start_line, start_col, stmts, exit_node)
+
+        def parse_statement(self):
+            tok = self.peek()
+            if tok is None:
+                self.error("expected a statement, found end of line")
+            
+            if tok.kind == "keyword" and tok.text == "i32":
+                return self.parse_decl()
+            elif tok.kind == "ident":
+                return self.parse_assign()
+            else:
+                self.error(f"cannot start a statement with '{tok.text}'")
+
+        def parse_decl(self):
+            tok = self.eat() # Eat "i32"
+            mutable = False
+            
+            if self.peek() is not None and self.peek().kind == "keyword" and self.peek().text == "mut":
+                self.eat()
+                mutable = True
+                
+            name = self.expect("ident", "a variable name")
+            
+            if self.peek() is None or self.peek().kind != "lbrace":
+                self.error(f"variable '{name.text}' needs an initialiser in {{}}")
+            self.eat() # Eat "{"
+            
+            init = self.parse_expr()
+            self.expect("rbrace", "'}'")
+            
+            return DeclNode(name.line, name.col, name.text, mutable, init)
+
+        def parse_assign(self):
+            name = self.eat() # We know it's ident from parse_statement
+            
+            tok = self.peek()
+            if tok is None or tok.kind != "assign":
+                got = f"'{tok.text}'" if tok else "end of line"
+                self.error(f"expected ':=' after '{name.text}', got {got}")
+            self.eat() # Eat ":="
+            
+            value = self.parse_expr()
+            return AssignNode(name.line, name.col, name.text, value)
+
+        def parse_exitStmt(self):
+            tok = self.eat() # Eat "exit"
+            value = self.parse_value()
+            return ExitNode(tok.line, tok.col, value)
+
+        def parse_expr(self):
+            left = self.parse_value()
+            
+            tok = self.peek()
+            if tok is not None and tok.kind == "operation":
+                op_tok = self.eat()
+                right = self.parse_value()
+                return BinOpNode(op_tok.line, op_tok.col, op_tok.text, left, right)
+                
+            return left
+
+        def parse_value(self):
+            tok = self.peek()
+            if tok is None:
+                self.error("expected a constant or a variable, found end of line")
+                
+            if tok.kind == "number":
+                self.eat()
+                return ConstNode(tok.line, tok.col, int(tok.text))
+            elif tok.kind == "ident":
+                self.eat()
+                return VarNode(tok.line, tok.col, tok.text)
+            else:
+                self.error(f"expected a constant or a variable, got '{tok.text}'")
+
+    here new rules:
+    factor     ::= number | ident
+    operand    ::= "+" | "-" | "*"
+    term       ::= factor { "*" factor }
+    expr       ::= term { ("+" | "-") term }
+    decl       ::= "i32" [ "mut" ] ident "{" expr "}"
+    assign     ::= ident ":=" expr
+    statement  ::= decl | assign | "\n"
+    exitStmt   ::= "exit" factor
+    program    ::= { statement } exitStmt
+
+    and skeleton from teacher:
+    def parse_expr(self): # expr ::= term { ("+" | "-") term }
+    node = self.parse_term()
+    while (tok := self.peek()) is not None and tok.kind == "op" and tok.text in "+-":
+    self.eat()
+    node = BinOpNode(tok.line, tok.col, tok.text, node, self.parse_term())
+    return node
+    parse_term is the same loop over * and parse_factor; parse_factor is the old operand: a constant or a variable, nothing else.
+
+    give only modified code and where to place it
 }
 
 answer:
 {
-    
+    Replace the `parse_exitStmt`, `parse_expr`, and `parse_value` methods inside your `Parser` class with the following updated methods.
+
+    I renamed `parse_value` to `parse_factor` to match your new grammar rules, added `parse_term` to handle `*` precedence, and updated `parse_expr` to handle `+` and `-` chaining.
+
+    **Place this code inside the `Parser` class, replacing everything from `def parse_exitStmt(self):` down to the end of the class:**
+
+    ```python
+        def parse_exitStmt(self):
+            tok = self.eat() # Eat "exit"
+            value = self.parse_factor() # Updated to use factor based on new rules
+            return ExitNode(tok.line, tok.col, value)
+
+        def parse_expr(self): # expr ::= term { ("+" | "-") term }
+            node = self.parse_term()
+            # Using the walrus operator as suggested by the skeleton
+            while (tok := self.peek()) is not None and tok.kind == "operation" and tok.text in ("+", "-"):
+                self.eat()
+                node = BinOpNode(tok.line, tok.col, tok.text, node, self.parse_term())
+            return node
+
+        def parse_term(self): # term ::= factor { "*" factor }
+            node = self.parse_factor()
+            while (tok := self.peek()) is not None and tok.kind == "operation" and tok.text == "*":
+                self.eat()
+                node = BinOpNode(tok.line, tok.col, tok.text, node, self.parse_factor())
+            return node
+
+        def parse_factor(self): # factor ::= number | ident (replaces parse_value)
+            tok = self.peek()
+            if tok is None:
+                self.error("expected a constant or a variable, found end of line")
+                
+            if tok.kind == "number":
+                self.eat()
+                return ConstNode(tok.line, tok.col, int(tok.text))
+            elif tok.kind == "ident":
+                self.eat()
+                return VarNode(tok.line, tok.col, tok.text)
+            else:
+                self.error(f"expected a constant or a variable, got '{tok.text}'")
+
+    ```
 }
 
 prompt:
 {
-
+    Final - testing
+    generate tests and expected outcomes for mentioned test cases:
+    A tests/ folder with at least 5 programs that compile and run, and at least 5 that must fail, each with its expected output or error message in a file next to it. Cover: 2 + 3 * 4, a chain where * sits in the middle (1 + 2 * 3 + 4), a left-associative chain of -, an expression on the right of :=, and the valid program of Practice 2 (still 70); two operators in a row, an operator at the end of a line, an operator right after {, tokens after a statement, and one Practice 2 error to prove nothing regressed.
 }
 
 answer:
 {
-    
+    Here is the layout for your `tests/` folder. It includes the 5 valid and 5 invalid programs exactly matching your constraints, along with their expected outputs or compiler error messages.
+
+    ### Valid Programs (Should compile and run)
+
+    **1. `tests/valid_precedence.txt**` (Tests `2 + 3 * 4`)
+
+    ```text
+    i32 x{2 + 3 * 4}
+    exit x
+
+    ```
+
+    *Expected Output (`tests/valid_precedence.out`):*
+
+    ```text
+    Program exit with result 14
+
+    ```
+
+    **2. `tests/valid_chain_mid.txt**` (Tests `1 + 2 * 3 + 4`)
+
+    ```text
+    i32 x{1 + 2 * 3 + 4}
+    exit x
+
+    ```
+
+    *Expected Output (`tests/valid_chain_mid.out`):*
+
+    ```text
+    Program exit with result 11
+
+    ```
+
+    **3. `tests/valid_left_assoc.txt**` (Tests left-associative chain `10 - 3 - 2`)
+
+    ```text
+    i32 mut a{10 - 3 - 2}
+    exit a
+
+    ```
+
+    *Expected Output (`tests/valid_left_assoc.out`):*
+
+    ```text
+    Program exit with result 5
+
+    ```
+
+    **4. `tests/valid_assign_expr.txt**` (Tests an expression on the right of `:=`)
+
+    ```text
+    i32 mut a{5}
+    a := a * 2 - 1
+    exit a
+
+    ```
+
+    *Expected Output (`tests/valid_assign_expr.out`):*
+
+    ```text
+    Program exit with result 9
+
+    ```
+
+    **5. `tests/valid_practice2.txt**` (The valid program of Practice 2)
+
+    ```text
+    i32 x{0}
+    i32 mut y{10}
+    i32 z{2 + 5}
+    i32 mut t{x + 10}
+    t := t * z
+    exit t
+
+    ```
+
+    *Expected Output (`tests/valid_practice2.out`):*
+
+    ```text
+    Program exit with result 70
+
+    ```
+
+    ---
+
+    ### Invalid Programs (Must fail compilation)
+
+    **6. `tests/invalid_double_op.txt**` (Tests two operators in a row)
+
+    ```text
+    i32 x{2 + * 3}
+    exit x
+
+    ```
+
+    *Expected Error (`tests/invalid_double_op.err`):*
+
+    ```text
+    compilation error: line 1:11: expected a constant or a variable, got '*'
+
+    ```
+
+    **7. `tests/invalid_eol_op.txt**` (Tests an operator at the end of a line)
+
+    ```text
+    i32 mut a{5}
+    a := a +
+    exit a
+
+    ```
+
+    *Expected Error (`tests/invalid_eol_op.err`):*
+
+    ```text
+    compilation error: line 2:9: expected a constant or a variable, found end of line
+
+    ```
+
+    **8. `tests/invalid_op_after_brace.txt**` (Tests an operator right after `{`)
+
+    ```text
+    i32 x{+ 2}
+    exit x
+
+    ```
+
+    *Expected Error (`tests/invalid_op_after_brace.err`):*
+
+    ```text
+    compilation error: line 1:7: expected a constant or a variable, got '+'
+
+    ```
+
+    **9. `tests/invalid_tokens_after.txt**` (Tests tokens after a statement)
+
+    ```text
+    i32 x{2} 5
+    exit x
+
+    ```
+
+    *Expected Error (`tests/invalid_tokens_after.err`):*
+
+    ```text
+    compilation error: line 1:10: unexpected '5' after the statement
+
+    ```
+
+    **10. `tests/invalid_redecl.txt**` (Practice 2 error check - redeclaration)
+
+    ```text
+    i32 x{5}
+    i32 x{10}
+    exit x
+
+    ```
+
+    *Expected Error (`tests/invalid_redecl.err`):*
+
+    ```text
+    compilation error: line 2:5: variable 'x' is already declared
+
+    ```   
 }
