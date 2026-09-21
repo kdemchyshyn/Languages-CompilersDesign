@@ -3,7 +3,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
-ai_usage.txt
+program
+test
+*.o
+*.ll
 
 # C extensions
 *.so

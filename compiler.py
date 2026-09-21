@@ -7,7 +7,7 @@ import llvmlite.binding as llvm
 KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
 
 def CompileError(message):
-    print(message, file=sys.stderr)
+    print("compilation error: " + message, file=sys.stderr)
     sys.exit(1)
 
 class Token:
@@ -188,6 +188,7 @@ def parse_exit(builder, line):
 parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
 parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
 parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
+parser.add_argument("--tokens", action="store_true", help="Print the generated tokens")
 args = parser.parse_args()
 
 I32, I8 = ir.IntType(32), ir.IntType(8)
@@ -207,6 +208,11 @@ lines = []
 with open(args.input, "rb") as fp:
     lines = lex(fp.read())
 
+if args.tokens:
+    for line_tokens in lines:
+        for token in line_tokens:
+            print(token)
+
 const_vars, mut_vars = {}, {}
 exit_calls = 0
 
@@ -214,13 +220,14 @@ for line in lines:
     if not line: continue
     first = line[0]
 
+    if exit_calls > 0:
+        raise CompileError(f"line {first.line}:{first.col}: statement after exit")
+
     if first.text == "i32":
         parse_declaration(builder, line)
     elif first.text == "exit":
         parse_exit(builder, line)
         exit_calls += 1
-        if exit_calls > 1:
-            raise CompileError(f"line {first.line}:{first.col}: program can only have one exit statement")
     elif first.kind == "ident":
         parse_assignment(builder, line)
     else:
