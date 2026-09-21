@@ -1,0 +1,1265 @@
+Gemini Pro
+link: https://share.gemini.google/uTgygTsKuRUd
+promprt:
+{
+    import argparse
+    import sys
+    from llvmlite import ir
+    import llvmlite.binding as llvm
+
+    variables = {} # name -> alloca
+
+    def compilation_error(line, message):
+        print(f"compilation error: line {line}: {message}", file=sys.stderr)
+        sys.exit(1)
+
+    def is_valid_int(val: str):
+        # Supports both "5" and "-5"
+        return val.isdigit() or (val.startswith("-") and val[1:].isdigit())
+
+    def declarateVar(builder, name: str, lineCnt):
+        if len(name.split()) > 1: 
+            compilation_error(lineCnt, "extra symbols after declaration")
+
+        if not (name[0].isalpha() or name[0] == "_"): 
+            compilation_error(lineCnt, "variable must start with letter or _")
+
+        for symbol in name: 
+            if not (symbol.isalpha() or symbol.isdigit() or symbol == "_"):
+                compilation_error(lineCnt, "variable can contain only letters, digits and _")
+
+        if name == "int" or name == "exit": 
+            compilation_error(lineCnt, "word reserved")
+
+        if name in variables: 
+            compilation_error(lineCnt, "variable already declared")
+
+        variables[name] = builder.alloca(I32, name=name)
+
+    def defineVar(builder, line: str, lineCnt):
+        line = line.replace(" ", "")
+
+        if ":=" not in line:
+            compilation_error(lineCnt, "uncomplete definition, :=")
+
+        tokens = line.split(":=")
+
+        if len(tokens) != 2:  
+            compilation_error(lineCnt, "too many definitions in one line")
+
+        name = tokens[0]
+        expr = tokens[1]
+        
+        if name not in variables:  
+            compilation_error(lineCnt, "unknown variable")
+
+        val1_str = ""
+        val2_str = ""
+        opr = ""
+        
+        for symbol in expr:
+            if symbol in {"+", "-", "*"}:
+                # Handle negative numbers at the start of expression (e.g., x := -5)
+                if symbol == "-" and val1_str == "":
+                    val1_str += symbol
+                    continue
+                    
+                if opr:
+                    compilation_error(lineCnt, "too many operations")
+                opr = symbol
+                continue
+
+            if not (symbol.isalpha() or symbol.isdigit() or symbol == "_"):
+                compilation_error(lineCnt, "wrong symbols")
+
+            if opr: 
+                val2_str += symbol
+            else:
+                val1_str += symbol
+
+        # --- Convert string 1 to LLVM ---
+        if val1_str in variables:
+            val1_ir = builder.load(variables[val1_str])
+        else:
+            if not is_valid_int(val1_str):
+                compilation_error(lineCnt, "value has to be variable or int")
+            val1_ir = ir.Constant(I32, int(val1_str))
+
+        # If simple assignment
+        if opr == "":
+            builder.store(val1_ir, variables[name])
+            return
+
+        # --- Convert string 2 to LLVM ---
+        if val2_str in variables:
+            val2_ir = builder.load(variables[val2_str])
+        else:
+            if not is_valid_int(val2_str):
+                compilation_error(lineCnt, "value has to be variable or int")
+            val2_ir = ir.Constant(I32, int(val2_str))
+
+        # Apply operations
+        if opr == "+":
+            builder.store(builder.add(val1_ir, val2_ir), variables[name])
+        elif opr == "-":
+            builder.store(builder.sub(val1_ir, val2_ir), variables[name])
+        elif opr == "*":
+            builder.store(builder.mul(val1_ir, val2_ir), variables[name])
+        else:
+            compilation_error(lineCnt, "wrong definition")
+
+
+    def exitProgram(builder, value: str, lineCnt):
+        if is_valid_int(value):
+            builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), ir.Constant(I32, int(value))])
+            builder.ret(ir.Constant(I32, 0))
+            return
+
+        if value in variables:
+            builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), builder.load(variables[value])])
+            builder.ret(ir.Constant(I32, 0))
+            return
+
+        compilation_error(lineCnt, "program must return value")
+
+
+    parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
+    parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
+    parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
+    args = parser.parse_args()
+
+    I32, I8 = ir.IntType(32), ir.IntType(8)
+
+    module = ir.Module(name="practice1")
+    module.triple = llvm.get_default_triple()
+    main = ir.Function(module, ir.FunctionType(I32, []), name="main")
+    builder = ir.IRBuilder(main.append_basic_block("entry"))
+
+    printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
+    text = b"Program exit with result %d\n\0"
+    fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
+    fmt.linkage, fmt.global_constant = "private", True
+    fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
+
+    lineCnt = 0
+    exitCalls = 0
+
+    with open(args.input, "r") as fp:
+        for raw_line in fp:
+            lineCnt += 1
+            
+            # Prevent empty line crashes
+            if not raw_line.strip():
+                continue
+                
+            line = " ".join(raw_line.split()) + "\n"
+
+            if exitCalls != 0:
+                compilation_error(lineCnt, "exit has been called")
+
+            token = ""
+            for i in range(len(line)):
+                if line[i] == " ":
+                    if token == "int":
+                        declarateVar(builder, line[i+1:].strip(), lineCnt)
+                        break
+                    elif token == "exit":
+                        exitProgram(builder, line[i+1:].strip(), lineCnt)
+                        exitCalls += 1
+                        break
+                elif line[i] == ":":
+                    defineVar(builder, line.strip(), lineCnt)
+                    break
+                elif line[i] == "\n":
+                    compilation_error(lineCnt, "no valid action")
+                
+                token += line[i]
+
+    if exitCalls != 1:
+        compilation_error(lineCnt, "program must exit once")
+
+    with open(args.output, "w") as f:
+        f.write(str(module))
+
+
+    #!/bin/bash
+
+    COMPILER="python3 compiler.py"
+    PASS_DIR="tests/pass"
+    FAIL_DIR="tests/fail"
+    OUTPUT_LL="test_output.ll"
+
+    passed=0
+    failed=0
+
+    echo "Running Compiler Tests..."
+    echo "========================="
+
+    echo "Testing valid programs (Expected exit 0 and matching output):"
+    for test_file in "$PASS_DIR"/*.txt; do
+            expected_file="${test_file%.txt}.expected"
+                
+                ERROR_MSG=$($COMPILER "$test_file" "$OUTPUT_LL" 2>&1 >/dev/null)
+                compilation_exit_code=$?
+
+                    if [ $compilation_exit_code -eq 0 ]; then
+                            if command -v lli >/dev/null 2>&1; then
+                                        ACTUAL_OUTPUT=$(lli "$OUTPUT_LL")
+                                                
+                                                if [ -f "$expected_file" ]; then
+                                                            EXPECTED_OUTPUT=$(cat "$expected_file")
+                                                                    
+                                                                    if [ "$ACTUAL_OUTPUT" = "$EXPECTED_OUTPUT" ]; then
+                                                                                    echo "  ✅ [PASS] $test_file (Compiled & Output Matched)"
+                                                                                                passed=$((passed + 1))
+                                                                                                    else
+                                                                                                                    echo "  ❌ [FAIL] $test_file (Output Mismatch)"
+                                                                                                                                echo "     Expected: '$EXPECTED_OUTPUT'"
+                                                                                                                                        echo "     Got:      '$ACTUAL_OUTPUT'"
+                                                                                                                                                    failed=$((failed + 1))
+                                                                                                                                                        fi
+                                                                                                                                                            else
+                                                                                                                                                                            echo "  ⚠️ [WARN] $test_file (Compiled, but $expected_file is missing)"
+                                                                                                                                                                                    passed=$((passed + 1))
+                                                                                                                                                                                        fi
+                                                                                                                                                                                        else
+                                                                                                                                                                                                     echo "  ⚠️ [WARN] lli command not found. Skipping execution phase for $test_file."
+                                                                                                                                                                                                              passed=$((passed + 1))
+                                                                                                                                                                                                              fi
+                                                                                                                                                                                                              else
+                                                                                                                                                                                                                          echo "  ❌ [FAIL] $test_file (Failed to compile)"
+                                                                                                                                                                                                                              echo "     Output: $ERROR_MSG"
+                                                                                                                                                                                                                                  failed=$((failed + 1))
+                                                                                                                                                                                                                                  fi
+                                                                                                                                                                                                                          done
+
+                                                                                                                                                                                                                          echo "-------------------------"
+
+                                                                                                                                                                                                                          echo "Testing invalid programs (Expected compilation error):"
+                                                                                                                                                                                                                          for test_file in "$FAIL_DIR"/*.txt; do
+                                                                                                                                                                                                                                  ERROR_MSG=$($COMPILER "$test_file" "$OUTPUT_LL" 2>&1 >/dev/null)
+                                                                                                                                                                                                                                      compilation_exit_code=$?
+
+                                                                                                                                                                                                                                      if [ $compilation_exit_code -ne 0 ]; then
+                                                                                                                                                                                                                                                  echo "  ✅ [PASS] $test_file correctly failed."
+                                                                                                                                                                                                                                                      echo "     -> Caught: $ERROR_MSG"
+                                                                                                                                                                                                                                                          passed=$((passed + 1))
+                                                                                                                                                                                                                                                          else
+                                                                                                                                                                                                                                                                  echo "  ❌ [FAIL] $test_file incorrectly compiled! (Expected an error)"
+                                                                                                                                                                                                                                                                      failed=$((failed + 1))
+                                                                                                                                                                                                                                                                      fi
+                                                                                                                                                                                                                                                                  done
+
+                                                                                                                                                                                                                                                                  rm -f "$OUTPUT_LL"
+
+                                                                                                                                                                                                                                                                  echo "========================="
+                                                                                                                                                                                                                                                                  echo "Test Summary: $passed passed, $failed failed."
+
+                                                                                                                                                                                                                                                                  if [ $failed -ne 0 ]; then
+                                                                                                                                                                                                                                                                          exit 1
+                                                                                                                                                                                                                                                                  else
+                                                                                                                                                                                                                                                                          exit 0
+                                                                                                                                                                                                                                                                  fi
+
+
+
+    склади покроковий детальний план імплементації для цієї практики (укр)
+}
+answer:
+{
+    ## Етап 1: Підготовка репозиторію та структури проєкту
+
+    1. Створіть Git-репозиторій (на GitHub або GitLab) для компілятора.
+
+
+    2. Закомітьте існуючий код із першої практики як найперший коміт.
+
+
+    3. Створіть нову гілку з назвою `practice-2` для виконання цього завдання.
+
+
+    4. Додайте або оновіть файл `README.md` з інструкціями щодо запуску компілятора та виконання тестів.
+
+
+    5. Підготуйте директорію `tests/`, де будуть зберігатися ваші тестові файли.
+
+
+
+    ## Етап 2: Реалізація лексера (State Machine)
+
+    1. Створіть клас `Token`, який міститиме такі обов'язкові атрибути: `kind` (тип), `text` (текст), `line` (рядок), `column` (колонка). Точні координати потрібні для правильного формування повідомлень про помилки на наступних етапах.
+
+
+    2. Напишіть функцію `lex(data: bytes)`, яка побайтово обробляє вхідний файл у циклі. **Суворо заборонено** використовувати регулярні вирази, методи на кшталт `str.split()`, `strtok` або генератори лексерів (наприклад, flex).
+
+
+    3. Побудуйте логіку машини станів (State Machine), яка читає один байт, оцінює його клас і поточний стан (наприклад, `START`, `IDENT`, `NUMBER`), після чого перемикає стан або додає сформований токен.
+
+
+    4. Розпізнавайте такі категорії токенів:
+    * `identifier`: імена, що не починаються з цифри та не є ключовими словами.
+
+
+    * `keyword`: зарезервовані слова `i32`, `mut`, `exit`.
+
+
+    * `number`: лише десяткові цифри без знака.
+
+
+    * `operator`: оператор присвоєння (`:=`) та арифметичні знаки (`+`, `-`, `*`).
+
+
+    * `block`: дужки для ініціалізатора `{` та `}`.
+
+
+    * `end of line`: символ `\n`.
+
+
+
+
+    5. Реалізуйте ігнорування пробілів та табуляцій, а також додайте обробку лексичних помилок (наприклад, невідомий байт `$` або незакрита дужка `{` на поточному рядку). Помилки мають виводитись у `stderr` у форматі `line:column`.
+
+
+    6. Організуйте збереження токенів у список або список списків (по одному списку токенів на рядок).
+
+
+    7. Протестуйте лексер ізольовано: роздрукуйте отриманий список токенів для кількох тестових файлів, щоб переконатися в коректності його роботи перед зміною генератора IR.
+
+
+
+    ## Етап 3: Синтаксичний та семантичний аналіз
+
+    1. Перепишіть основний цикл компілятора так, щоб він працював з масивом токенів, згенерованим лексером, а не з рядками вихідного коду. Логіка перевірок більше не повинна читати сирцевий текст.
+
+
+    2. Реалізуйте парсинг оновленого синтаксису:
+    * Декларація константи: `i32 x { 5 }`.
+
+
+    * Декларація змінної: `i32 mut y { 10 }` (усі змінні вважаються незмінними, якщо немає слова `mut`).
+
+
+    * Операція присвоєння: `y := x + 3`.
+
+
+    * Вихід з програми: `exit y` (останній рядок, приймає константу або змінну).
+
+
+
+
+    3. Додайте обробку арифметичних виразів, які містять не більше однієї операції (`+`, `-`, `*`) між двома константами або змінними, що знаходяться всередині ініціалізатора `{}` або після `:=`.
+
+
+    4. Додайте суворі семантичні перевірки, кожна з яких повинна вказувати `line:column` токена, що викликав помилку:
+    * Змінна повинна бути задекларована перед першим використанням.
+
+
+    * Присвоювати значення можна лише змінним, задекларованим з ключовим словом `mut`.
+
+
+    * Заборонено повторне декларування змінної з таким самим ім'ям.
+
+
+    * Ініціалізатор у фігурних дужках `{}` є обов'язковим для кожної декларації.
+
+
+
+
+
+    ## Етап 4: Генерація коду (LLVM IR)
+
+    1. Залиште механізм генерації IR на основі API `llvmlite.ir`, як це було у попередній практиці. Генерація тексту IR вручну через склеювання рядків оцінюється в 0 балів за друге завдання.
+
+
+    2. Зв'яжіть нові синтаксичні правила з відповідними LLVM-інструкціями:
+    * Декларація змінної компілюється в інструкцію `alloca`, після чого слідує `store` для запису ініціалізатора.
+
+
+    * Операція присвоєння викликає інструкцію `store`.
+
+
+    * Будь-яке читання значення змінної викликає інструкцію `load`.
+
+
+    * Команда `exit` компілюється у виклик `printf` та подальшу інструкцію `ret`.
+
+
+
+
+    3. Налаштуйте поведінку програми у разі помилки: компілятор має негайно завершувати роботу з ненульовим кодом помилки та не створювати вихідний файл `.ll`.
+
+
+
+    ## Етап 5: Тестування та здача проєкту
+
+    1. Наповніть папку `tests/` мінімум 10 тестовими файлами: щонайменше 5 програм, які компілюються успішно, і 5 таких, що повинні падати з помилкою.
+
+
+    2. Біля кожного тестового файлу створіть додатковий файл з очікуваним виводом (або текстом повідомлення про помилку).
+
+
+    3. Переконайтеся, що тести покривають ключові сценарії: декларацію констант та `mut` змінних, роботу ініціалізаторів з операціями, некоректні відступи, невідомі байти, використання до декларації, відсутність ініціалізатора та спробу зміни константи.
+
+
+    4. Створіть Pull Request із гілки `practice-2` у гілку `main`.
+
+
+    5. Додайте користувача `vovaskochko` як рецензента (reviewer) до вашого Pull Request. Якщо репозиторій приватний, надайте викладачу доступ на читання.
+
+
+    6. Підготуйте текстовий файл `ai_usage.txt` із журналом використання AI.
+
+
+    7. Для фінальної здачі завантажте в систему Moodle два посилання (на репозиторій та на Pull Request), а також файл `ai_usage.txt`. Після завершення перевірки змерджіть Pull Request у `main`.
+}
+
+prompt:
+generate 5 test cases
+
+answer:
+Ось 5 тестових сценаріїв, які покривають основні синтаксичні та семантичні правила другої практики.
+
+**1. Успішна компіляція: Декларація константи та вихід**
+Цей тест перевіряє базове оголошення незмінної змінної та використання її у команді виходу.
+
+* **Файл коду (`test1.txt`):**
+```text
+i32 x { 42 }
+exit x
+
+```
+
+
+* **Очікуваний результат (`test1.expected`):**
+```text
+Program exit with result 42
+
+```
+
+
+
+**2. Успішна компіляція: Mutable змінна та арифметичні операції**
+Перевіряє оголошення `mut` змінної, ініціалізацію з використанням іншої константи, математичну операцію (`+`) та присвоєння.
+
+* **Файл коду (`test2.txt`):**
+```text
+i32 a { 10 }
+i32 mut b { a + 5 }
+b := b * 2
+exit b
+
+```
+
+
+* **Очікуваний результат (`test2.expected`):**
+```text
+Program exit with result 30
+
+```
+
+
+
+**3. Помилка: Присвоєння значення константі**
+Перевіряє семантичну помилку спроби змінити значення змінної, яка не була задекларована з ключовим словом `mut`.
+
+* **Файл коду (`test3.txt`):**
+```text
+i32 x { 5 }
+x := 10
+exit x
+
+```
+
+
+* **Очікуваний вивід у `stderr`:**
+```text
+compilation error: line 2:1: cannot assign to 'x': it is not mut
+
+```
+
+
+
+**4. Помилка: Використання змінної до її декларації**
+Перевіряє правило, згідно з яким змінна повинна бути задекларована перед першим використанням (в ініціалізаторі, присвоєнні або `exit`).
+
+* **Файл коду (`test4.txt`):**
+```text
+i32 mut y { x + 10 }
+i32 x { 5 }
+exit y
+
+```
+
+
+* **Очікуваний вивід у `stderr`:**
+```text
+compilation errorWhat specific application, feature, or function would you like these test cases for? 
+
+
+```
+
+
+
+Once you let me know the subject (e.g., a login screen, a sorting algorithm, a checkout process, or a physical product), I can generate five tailored test cases for you.
+
+link: https://share.gemini.google/rHt5wcXVTFuG
+promprt:
+analyze, check and grade task 1:
+import argparse
+import sys
+from llvmlite import ir
+import llvmlite.binding as llvm
+
+KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
+
+def CompileError(message):
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+class Token:
+    def __init__(self, kind, text, line, col):
+        self.kind = kind
+        self.text = text
+        self.line = line
+        self.col = col
+
+    def __repr__(self):
+        return f"Token({self.kind}, '{self.text}', {self.line}:{self.col})"
+
+def is_alpha(b):
+    if b > 127: return False
+    return b is not None and (chr(b).isalpha() or chr(b) == '_')
+
+def is_digit(b):
+    if b > 127: return False
+    return b is not None and chr(b).isdigit()
+
+def lex(data: bytes):
+    lines, tokens = [], []
+    state, start, line, col = "START", 0, 1, 1
+    blocks = 0
+    i = 0
+    while i <= len(data): # one extra step: the end of input
+        b = data[i] if i < len(data) else None
+        if state == "START":
+            if b is None: 
+                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
+                else: break
+            elif b in (32, 9): pass # space, tab
+            elif b == 10: 
+                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
+                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
+            elif is_alpha(b): state, start = "IDENT", i
+            elif is_digit(b): state, start = "NUMBER", i
+            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
+            elif b == ord("+"): tokens.append(Token("add", "+", line, col))
+            elif b == ord("-"): tokens.append(Token("sub", "-", line, col))
+            elif b == ord("*"): tokens.append(Token("mul", "*", line, col))
+            elif b == ord("}"): 
+                tokens.append(Token("rbrace", "}", line, col))
+                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
+                else: blocks -= 1
+            elif b == ord(":"): state, start = "ASSIGN", i
+            else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
+        elif state == "IDENT":
+            if b is not None and (is_alpha(b) or is_digit(b)): pass
+            else:
+                word = data[start:i]
+                tokens.append(Token(KEYWORDS.get(word, "ident"), word.decode(), line, col - len(word)))
+                state = "START"; continue # re-read this byte in START
+        elif state == "NUMBER": 
+            if b is not None and is_digit(b): pass
+            elif b is not None and is_alpha(b): raise CompileError(f"line {line}:{col}: a letter inside a number {data[start:i+1].decode()}")
+            else:
+                number = data[start:i]
+                tokens.append(Token("number", number.decode(), line, col - len(number)))
+                state = "START"; continue # re-read this byte in START
+        elif state == "ASSIGN": 
+            if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
+            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
+        i += 1; col += 1
+    if tokens: lines.append(tokens)
+    return lines
+
+parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
+parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
+parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
+args = parser.parse_args()
+
+I32, I8 = ir.IntType(32), ir.IntType(8)
+
+module = ir.Module(name="practice1")
+module.triple = llvm.get_default_triple()
+main = ir.Function(module, ir.FunctionType(I32, []), name="main")
+builder = ir.IRBuilder(main.append_basic_block("entry"))
+
+printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
+text = b"Program exit with result %d\n\0"
+fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
+fmt.linkage, fmt.global_constant = "private", True
+fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
+
+lines = []
+with open(args.input, "rb") as fp:
+    lines = lex(fp.read())
+
+print(lines)
+
+answer:
+The lexer implementation successfully meets the core requirements for Task 1 outlined in "w02-practice.pdf". It correctly avoids regular expressions and built-in splitting functions in favor of a hand-written state machine that processes the source byte-by-byte.
+
+**Architecture and State Machine**
+
+* **Byte-by-Byte Processing:** The `lex` function iterates through the input bytes one at a time (`while i <= len(data)`), properly handling the end-of-file condition by yielding `None` for the final step to flush the last token.
+
+
+* **State Management:** You implemented an explicit state machine using `START`, `IDENT`, `NUMBER`, and `ASSIGN` states, which aligns perfectly with the requirement to use a loop over bytes with explicit states.
+
+
+* **Re-evaluating Bytes:** When transitioning out of `IDENT` or `NUMBER`, the state machine correctly uses `continue` without advancing `i` and `col`. This satisfies the rule that the scanner may re-examine the byte that ended a token.
+
+
+* **Token Grouping:** By using `tokens` to build lines and appending them to `lines` on encountering a newline (ASCII 10), you successfully constructed a vector of vectors (one inner vector per line) to make the parsing phase easier.
+
+
+
+**Token Structure**
+
+* **Required Fields:** The `Token` class captures all mandated attributes: `kind`, `text`, `line`, and `col`.
+
+
+* **Keywords vs Identifiers:** Keywords (`i32`, `mut`, `exit`) are correctly evaluated only after the entire word is collected in the `IDENT` state, using dictionary lookup (`KEYWORDS.get`).
+
+
+
+**Lexical Error Handling**
+
+* **Line and Column Tracking:** The `line` and `col` variables accurately track position, incrementing correctly and resetting `col` to `0` on newlines so the first character of the next line starts at `1`.
+
+
+* **Unknown Bytes:** Unhandled ASCII characters trigger a `CompileError` formatted as `line X:Y: unexpected byte '...'`, matching the assignment's required error format.
+
+
+* **Unterminated Blocks:** You track open braces with `blocks` and raise an error if a newline or EOF is reached while a `{` remains unclosed on the same line.
+
+
+* **Malformed Numbers:** The lexer specifically checks for letters inside numbers (`is_alpha(b)` inside the `NUMBER` state) and throws an appropriate error.
+
+
+* **Malformed Assignments:** The `ASSIGN` state correctly catches cases where `:` is not immediately followed by `=`, satisfying the operator rules.
+
+
+
+**Minor Technical Feedback**
+Your `is_alpha` and `is_digit` helpers use Python's `chr(b).isalpha()` and `chr(b).isdigit()`. Because you explicitly guard these with `if b > 127: return False`, you safely avoid accidentally matching non-ASCII Unicode characters that Python considers alphabetic, keeping the lexer strictly ASCII-compliant.
+
+**Grade Verdict**
+**2 / 2 points for Task 1.** The code strictly follows the architectural constraints for the lexer (no regex, strict state machine) and implements all necessary structural features and error guardrails required by the assignment.
+
+prompt:
+review additional code, it is for task 2. Is it possible to refactor it and make better? analyze, check and grade it:
+import argparse
+from os import name
+import sys
+from llvmlite import ir
+import llvmlite.binding as llvm
+
+KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
+
+def CompileError(message):
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+class Token:
+    def __init__(self, kind, text, line, col):
+        self.kind = kind
+        self.text = text
+        self.line = line
+        self.col = col
+
+    def __repr__(self):
+        return f"Token({self.kind}, '{self.text}', {self.line}:{self.col})"
+
+def is_alpha(b):
+    if b > 127: return False
+    return b is not None and (chr(b).isalpha() or chr(b) == '_')
+
+def is_digit(b):
+    if b > 127: return False
+    return b is not None and chr(b).isdigit()
+
+def lex(data: bytes):
+    lines, tokens = [], []
+    state, start, line, col = "START", 0, 1, 1
+    blocks = 0
+    i = 0
+    while i <= len(data): # one extra step: the end of input
+        b = data[i] if i < len(data) else None
+        if state == "START":
+            if b is None: 
+                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
+                else: break
+            elif b in (32, 9): pass # space, tab
+            elif b == 10: 
+                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
+                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
+            elif is_alpha(b): state, start = "IDENT", i
+            elif is_digit(b): state, start = "NUMBER", i
+            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
+            elif b == ord("+"): tokens.append(Token("operation", "+", line, col))
+            elif b == ord("-"): tokens.append(Token("operation", "-", line, col))
+            elif b == ord("*"): tokens.append(Token("operation", "*", line, col))
+            elif b == ord("}"): 
+                tokens.append(Token("rbrace", "}", line, col))
+                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
+                else: blocks -= 1
+            elif b == ord(":"): state, start = "ASSIGN", i
+            else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
+        elif state == "IDENT":
+            if b is not None and (is_alpha(b) or is_digit(b)): pass
+            else:
+                word = data[start:i]
+                tokens.append(Token(KEYWORDS.get(word, "ident"), word.decode(), line, col - len(word)))
+                state = "START"; continue # re-read this byte in START
+        elif state == "NUMBER": 
+            if b is not None and is_digit(b): pass
+            elif b is not None and is_alpha(b): raise CompileError(f"line {line}:{col}: a letter inside a number {data[start:i+1].decode()}")
+            else:
+                number = data[start:i]
+                tokens.append(Token("number", number.decode(), line, col - len(number)))
+                state = "START"; continue # re-read this byte in START
+        elif state == "ASSIGN": 
+            if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
+            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
+        i += 1; col += 1
+    if tokens: lines.append(tokens)
+    return lines
+
+def declarateVar(builder, line: list[Token]):
+    i = 1
+    token = line[i]
+
+    isMut = False
+    if line[i].kind == "keyword" and line[i].text == "mut": isMut = True; next(i)
+
+    if line[i].kind != "identifier": 
+        raise CompileError(f"line {line[i].line}:{line[i].col}: invalid variable name {line[i].text}")
+    else: 
+        name = line[i].text
+        if name in mut or name in const:
+            raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' is already defined")
+        next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
+
+    if line[i].kind != "lbrace":
+        raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
+
+    next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
+
+    value = None
+    value_1 = None
+    value_2 = None
+    opr = None
+
+    # single value or value 1
+    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
+    elif token.kind == "identifier":
+        if token.text in mut: value_1 = builder.load(mut[token.text])
+        elif token.text in const: value_1 = builder.load(const[token.text])
+        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.kind == "operation" and token.text == "-":
+        value_1 = ir.Constant(I32, 0)
+        next(i - 2)
+    else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+    next(i)
+    if token.kind != "rbrace":
+        if token.kind == "operation": opr = token.text
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+        next(i, mssg=f"invalid initialiser for variable '{name}'")
+
+        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
+        elif token.kind == "identifier":
+            if token.text in mut: value_2 = builder.load(mut[token.text])
+            elif token.text in const: value_2 = builder.load(const[token.text])
+            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+        next(i, mssg=f"invalid initialiser for variable '{name}'")
+        if token.kind != "rbrace": raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+        if opr == "+": value = builder.add(value_1, value_2)
+        elif opr == "-": value = builder.sub(value_1, value_2)  
+        elif opr == "*": value = builder.mul(value_1, value_2)
+
+    else: value = value_1
+
+    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+    if isMut: mut[name] = builder.alloca(I32, name=name); builder.store(value, mut[name])
+    else: const[name] = builder.alloca(I32, name=name); builder.store(value, const[name])
+
+    def next(value: int, mssg: str = "unexpected end of line"):
+        if value + 1 >= len(line): 
+            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
+
+        i = value + 1
+        token = line[i]
+
+
+def exitProgram(builder, line: list[Token]):
+    token = line[1]
+
+    value = None
+    value_1 = None
+    value_2 = None
+    opr = None
+
+    # single value or value 1
+    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
+    elif token.kind == "identifier":
+        if token.text in mut: value_1 = builder.load(mut[token.text])
+        elif token.text in const: value_1 = builder.load(const[token.text])
+        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.kind == "operation" and token.text == "-":
+        builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), ir.Constant(I32, -int(token.text))])
+        builder.ret(ir.Constant(I32, 0))
+        return
+    else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
+
+    if 2 < len(line):
+        token = line[2]
+
+        if token.kind == "operation": opr = token.text
+        else: raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+        token = line[3]
+
+        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
+        elif token.kind == "identifier":
+            if token.text in mut: value_2 = builder.load(mut[token.text])
+            elif token.text in const: value_2 = builder.load(const[token.text])
+            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
+
+        if opr == "+": value = builder.add(value_1, value_2)
+        elif opr == "-": value = builder.sub(value_1, value_2)  
+        elif opr == "*": value = builder.mul(value_1, value_2)
+
+        if 4 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+    else: 
+        value = value_1
+
+    builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), value])
+    builder.ret(ir.Constant(I32, 0))
+    return
+
+
+def defineVar(builder, line: list[Token]):
+    i = 1
+    token = line[i]
+
+    if token.kind != "identifier":
+        raise CompileError(f"line {token.line}:{token.col}: invalid variable name {token.text}")
+    elif token.text not in const and token.text not in mut:
+        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.text not in mut:
+        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not mutable")
+    else: name = token.text
+
+    next(i, mssg=f"wrong operation")
+    if token.kind != "assign": raise CompileError(f"line {token.line}:{token.col}: wrong operation")
+
+    next(i, mssg=f"nothing to assign")
+
+    value = None
+    value_1 = None
+    value_2 = None
+    opr = None
+
+    # single value or value 1
+    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
+    elif token.kind == "identifier":
+        if token.text in mut: value_1 = builder.load(mut[token.text])
+        elif token.text in const: value_1 = builder.load(const[token.text])
+        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.kind == "operation" and token.text == "-":
+        value_1 = ir.Constant(I32, 0)
+        next(i - 2)
+    else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
+
+    if i + 1 < len(line):
+        next(i)
+        if token.kind == "operation": opr = token.text
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
+
+        next(i, mssg=f"invalid expression")
+
+        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
+        elif token.kind == "identifier":
+            if token.text in mut: value_2 = builder.load(mut[token.text])
+            elif token.text in const: value_2 = builder.load(const[token.text])
+            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
+
+        if opr == "+": value = builder.add(value_1, value_2)
+        elif opr == "-": value = builder.sub(value_1, value_2)  
+        elif opr == "*": value = builder.mul(value_1, value_2)
+
+    else: value = value_1
+    
+    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+    builder.store(value, mut[name])
+
+    def next(value: int, mssg: str = "unexpected end of line"):
+        if value + 1 >= len(line): 
+            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
+
+        i = value + 1
+        token = line[i]
+
+
+parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
+parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
+parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
+args = parser.parse_args()
+
+I32, I8 = ir.IntType(32), ir.IntType(8)
+
+module = ir.Module(name="practice1")
+module.triple = llvm.get_default_triple()
+main = ir.Function(module, ir.FunctionType(I32, []), name="main")
+builder = ir.IRBuilder(main.append_basic_block("entry"))
+
+printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
+text = b"Program exit with result %d\n\0"
+fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
+fmt.linkage, fmt.global_constant = "private", True
+fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
+
+lines = []
+with open(args.input, "rb") as fp:
+    lines = lex(fp.read())
+
+const, mut = {}, {}
+exitCalls = 0
+for line in lines:
+    if not line: continue
+
+    firstToken = line[0]
+    if firstToken.text == "i32": declarateVar(builder, line)
+    elif firstToken.text == "exit": exitProgram(builder, line); exitCalls += 1
+    elif firstToken.kind == "identifier": defineVar(builder, line)
+    else: raise CompileError(f"line {firstToken.line}:{firstToken.col}: invalid statement")
+
+if exitCalls == 0: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program needs an exit statement")
+elif exitCalls > 1: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program can only have one exit statement")
+
+with open(args.output, "w") as f:
+    f.write(str(module))
+
+answer:
+review additional code, it is for task 2. Is it possible to refactor it and make better? analyze, check and grade it:
+import argparse
+from os import name
+import sys
+from llvmlite import ir
+import llvmlite.binding as llvm
+
+KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
+
+def CompileError(message):
+    print(message, file=sys.stderr)
+    sys.exit(1)
+
+class Token:
+    def __init__(self, kind, text, line, col):
+        self.kind = kind
+        self.text = text
+        self.line = line
+        self.col = col
+
+    def __repr__(self):
+        return f"Token({self.kind}, '{self.text}', {self.line}:{self.col})"
+
+def is_alpha(b):
+    if b > 127: return False
+    return b is not None and (chr(b).isalpha() or chr(b) == '_')
+
+def is_digit(b):
+    if b > 127: return False
+    return b is not None and chr(b).isdigit()
+
+def lex(data: bytes):
+    lines, tokens = [], []
+    state, start, line, col = "START", 0, 1, 1
+    blocks = 0
+    i = 0
+    while i <= len(data): # one extra step: the end of input
+        b = data[i] if i < len(data) else None
+        if state == "START":
+            if b is None: 
+                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
+                else: break
+            elif b in (32, 9): pass # space, tab
+            elif b == 10: 
+                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
+                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
+            elif is_alpha(b): state, start = "IDENT", i
+            elif is_digit(b): state, start = "NUMBER", i
+            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
+            elif b == ord("+"): tokens.append(Token("operation", "+", line, col))
+            elif b == ord("-"): tokens.append(Token("operation", "-", line, col))
+            elif b == ord("*"): tokens.append(Token("operation", "*", line, col))
+            elif b == ord("}"): 
+                tokens.append(Token("rbrace", "}", line, col))
+                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
+                else: blocks -= 1
+            elif b == ord(":"): state, start = "ASSIGN", i
+            else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
+        elif state == "IDENT":
+            if b is not None and (is_alpha(b) or is_digit(b)): pass
+            else:
+                word = data[start:i]
+                tokens.append(Token(KEYWORDS.get(word, "ident"), word.decode(), line, col - len(word)))
+                state = "START"; continue # re-read this byte in START
+        elif state == "NUMBER": 
+            if b is not None and is_digit(b): pass
+            elif b is not None and is_alpha(b): raise CompileError(f"line {line}:{col}: a letter inside a number {data[start:i+1].decode()}")
+            else:
+                number = data[start:i]
+                tokens.append(Token("number", number.decode(), line, col - len(number)))
+                state = "START"; continue # re-read this byte in START
+        elif state == "ASSIGN": 
+            if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
+            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
+        i += 1; col += 1
+    if tokens: lines.append(tokens)
+    return lines
+
+def declarateVar(builder, line: list[Token]):
+    i = 1
+    token = line[i]
+
+    isMut = False
+    if line[i].kind == "keyword" and line[i].text == "mut": isMut = True; next(i)
+
+    if line[i].kind != "identifier": 
+        raise CompileError(f"line {line[i].line}:{line[i].col}: invalid variable name {line[i].text}")
+    else: 
+        name = line[i].text
+        if name in mut or name in const:
+            raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' is already defined")
+        next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
+
+    if line[i].kind != "lbrace":
+        raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
+
+    next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
+
+    value = None
+    value_1 = None
+    value_2 = None
+    opr = None
+
+    # single value or value 1
+    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
+    elif token.kind == "identifier":
+        if token.text in mut: value_1 = builder.load(mut[token.text])
+        elif token.text in const: value_1 = builder.load(const[token.text])
+        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.kind == "operation" and token.text == "-":
+        value_1 = ir.Constant(I32, 0)
+        next(i - 2)
+    else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+    next(i)
+    if token.kind != "rbrace":
+        if token.kind == "operation": opr = token.text
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+        next(i, mssg=f"invalid initialiser for variable '{name}'")
+
+        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
+        elif token.kind == "identifier":
+            if token.text in mut: value_2 = builder.load(mut[token.text])
+            elif token.text in const: value_2 = builder.load(const[token.text])
+            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+        next(i, mssg=f"invalid initialiser for variable '{name}'")
+        if token.kind != "rbrace": raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
+
+        if opr == "+": value = builder.add(value_1, value_2)
+        elif opr == "-": value = builder.sub(value_1, value_2)  
+        elif opr == "*": value = builder.mul(value_1, value_2)
+
+    else: value = value_1
+
+    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+    if isMut: mut[name] = builder.alloca(I32, name=name); builder.store(value, mut[name])
+    else: const[name] = builder.alloca(I32, name=name); builder.store(value, const[name])
+
+    def next(value: int, mssg: str = "unexpected end of line"):
+        if value + 1 >= len(line): 
+            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
+
+        i = value + 1
+        token = line[i]
+
+
+def exitProgram(builder, line: list[Token]):
+    token = line[1]
+
+    value = None
+    value_1 = None
+    value_2 = None
+    opr = None
+
+    # single value or value 1
+    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
+    elif token.kind == "identifier":
+        if token.text in mut: value_1 = builder.load(mut[token.text])
+        elif token.text in const: value_1 = builder.load(const[token.text])
+        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.kind == "operation" and token.text == "-":
+        builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), ir.Constant(I32, -int(token.text))])
+        builder.ret(ir.Constant(I32, 0))
+        return
+    else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
+
+    if 2 < len(line):
+        token = line[2]
+
+        if token.kind == "operation": opr = token.text
+        else: raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+        token = line[3]
+
+        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
+        elif token.kind == "identifier":
+            if token.text in mut: value_2 = builder.load(mut[token.text])
+            elif token.text in const: value_2 = builder.load(const[token.text])
+            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
+
+        if opr == "+": value = builder.add(value_1, value_2)
+        elif opr == "-": value = builder.sub(value_1, value_2)  
+        elif opr == "*": value = builder.mul(value_1, value_2)
+
+        if 4 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+    else: 
+        value = value_1
+
+    builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), value])
+    builder.ret(ir.Constant(I32, 0))
+    return
+
+
+def defineVar(builder, line: list[Token]):
+    i = 1
+    token = line[i]
+
+    if token.kind != "identifier":
+        raise CompileError(f"line {token.line}:{token.col}: invalid variable name {token.text}")
+    elif token.text not in const and token.text not in mut:
+        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.text not in mut:
+        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not mutable")
+    else: name = token.text
+
+    next(i, mssg=f"wrong operation")
+    if token.kind != "assign": raise CompileError(f"line {token.line}:{token.col}: wrong operation")
+
+    next(i, mssg=f"nothing to assign")
+
+    value = None
+    value_1 = None
+    value_2 = None
+    opr = None
+
+    # single value or value 1
+    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
+    elif token.kind == "identifier":
+        if token.text in mut: value_1 = builder.load(mut[token.text])
+        elif token.text in const: value_1 = builder.load(const[token.text])
+        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+    elif token.kind == "operation" and token.text == "-":
+        value_1 = ir.Constant(I32, 0)
+        next(i - 2)
+    else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
+
+    if i + 1 < len(line):
+        next(i)
+        if token.kind == "operation": opr = token.text
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
+
+        next(i, mssg=f"invalid expression")
+
+        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
+        elif token.kind == "identifier":
+            if token.text in mut: value_2 = builder.load(mut[token.text])
+            elif token.text in const: value_2 = builder.load(const[token.text])
+            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
+        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
+
+        if opr == "+": value = builder.add(value_1, value_2)
+        elif opr == "-": value = builder.sub(value_1, value_2)  
+        elif opr == "*": value = builder.mul(value_1, value_2)
+
+    else: value = value_1
+    
+    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
+
+    builder.store(value, mut[name])
+
+    def next(value: int, mssg: str = "unexpected end of line"):
+        if value + 1 >= len(line): 
+            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
+
+        i = value + 1
+        token = line[i]
+
+
+parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
+parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
+parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
+args = parser.parse_args()
+
+I32, I8 = ir.IntType(32), ir.IntType(8)
+
+module = ir.Module(name="practice1")
+module.triple = llvm.get_default_triple()
+main = ir.Function(module, ir.FunctionType(I32, []), name="main")
+builder = ir.IRBuilder(main.append_basic_block("entry"))
+
+printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
+text = b"Program exit with result %d\n\0"
+fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
+fmt.linkage, fmt.global_constant = "private", True
+fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
+
+lines = []
+with open(args.input, "rb") as fp:
+    lines = lex(fp.read())
+
+const, mut = {}, {}
+exitCalls = 0
+for line in lines:
+    if not line: continue
+
+    firstToken = line[0]
+    if firstToken.text == "i32": declarateVar(builder, line)
+    elif firstToken.text == "exit": exitProgram(builder, line); exitCalls += 1
+    elif firstToken.kind == "identifier": defineVar(builder, line)
+    else: raise CompileError(f"line {firstToken.line}:{firstToken.col}: invalid statement")
+
+if exitCalls == 0: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program needs an exit statement")
+elif exitCalls > 1: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program can only have one exit statement")
+
+with open(args.output, "w") as f:
+    f.write(str(module))
