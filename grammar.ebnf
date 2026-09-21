@@ -4,5 +4,5 @@ expr       ::= value [ operand value ]
 decl       ::= "i32" [ "mut" ] ident "{" expr "}"
 assign     ::= ident ":=" expr
 statement  ::= decl | assign | "\n"
-exitStmt   ::= "exit" expr
+exitStmt   ::= "exit" value
 program    ::= { statement } exitStmt

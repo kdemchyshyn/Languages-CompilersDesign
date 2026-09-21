@@ -110,7 +110,7 @@ class Parser:
 
     def parse_exitStmt(self):
         tok = self.eat() # Eat "exit"
-        value = self.parse_expr()
+        value = self.parse_value()
         return ExitNode(tok.line, tok.col, value)
 
     def parse_expr(self):
