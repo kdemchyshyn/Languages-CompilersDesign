@@ -10,8 +10,8 @@ python3 compiler.py input.txt output.ll
 python3 compiler.py input.txt output.ll --tokens
 
 ### Execute the generated LLVM IR
-llc -filetype=obj -relocation-model=pic output.ll -o output.o
-clang -fPIE output.o -o program
+llc -filetype=obj -relocation-model=pic output.ll -o output.o<br>
+clang -fPIE output.o -o program <br>
 ./program
 
 ### Run the test suite

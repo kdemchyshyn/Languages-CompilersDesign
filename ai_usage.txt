@@ -1,131 +1,893 @@
 Gemini Pro
-link: https://share.gemini.google/uTgygTsKuRUd
-promprt:
+link: https://share.gemini.google/hpQMoXwoA16h
+
+prompt:
 {
+    First, you should check language rules and define:
+    value (number or ident)
+    expr ( some value or operation on them)
+    statement
+    exitStmt
+    program
+    operand ( +, -, *)
+
+    and output me a code or txt format (easy to copy) with language formalized rules. Here is rules for both language and rules formatting:
+    THE COMPILER INTERFACE
+    Same layout, same two arguments, one new flag:
+    python3 compiler.py input.txt output.ll # compile, as before
+    python3 compiler.py --ast input.txt # print the tree, write nothing
+    lli output.ll # run the IR while debugging
+    On any error the compiler prints one line to stderr and exits with a non-zero code, without writing the output file:
+    compilation error: line 2:10: expected a constant or a variable, got '*'
+    line:column is the position of the first byte of the token that caused the error. When the error is that the line ended too early (x := x +), the position is the column right after the last token of that line — the place where something should have been typed.
+    1
+    TASK 1 — THE GRAMMAR (0.5 POINTS)
+    Why write it down
+    Your Practice 2 checker already contains a grammar — it is just written as ifs: “the line starts with i32, then maybe mut, then a name, then {”, “three tokens with an operator in the middle”. A grammar says the same thing in a notation that names every shape, so that the next task can turn each name into a function and each shape into a class.
+    We use EBNF. A rule is name ::= right side; | separates alternatives; [ x ] means optional; { x } means zero or more; quoted words are terminals — they come from the lexer as they are; unquoted names are non-terminals — they have a rule of their own. One rule of the Practice 2 language, as an example:
+    decl ::= "i32" [ "mut" ] ident "{" value "}"
+    What to write
+    The whole Practice 2 language, in a file grammar.ebnf (or a comment block at the top of compiler.py): what a program is, what a statement is, the three statements, and what a value and an operand are. Remember that a line holds one statement, that blank lines are allowed, and that exit ends the program. Six to eight rules is the right size.
+    Check it against the lexer
+    Go through your grammar with the token table from Practice 2 next to it:
+    •
+    Every quoted terminal must be a token the lexer emits, with the same text: "i32", "mut", "exit", "{", "}", ":=", "+", "-", "*". If the grammar needs a symbol the lexer has no token for, the lexer is incomplete — note it.
+    •
+    ident and number are terminals too. How a name is spelled (letters, digits, _, not starting with a digit) is the lexer’s rule, not the grammar’s; the grammar only says where a name may stand.
+    •
+    Some things the grammar cannot say: that x in x := 5 was declared, that it is mut, that i32 x{x} uses x too early. Those are semantics and stay in the walk (Task 3). If a rule of yours tries to say them, it does not belong here.
+}
+
+answer:
+{
+    Here is the formalized grammar in EBNF format, packaged in a clean, easy-to-copy text block.
+
+    Based on your compiler specifications, this grammar consists of exactly 8 rules, satisfying the requirement to define `program`, `statement`, the three statements (`decl`, `assign`, `exitStmt`), `expr`, `value`, and `operand`. It explicitly accounts for the "one statement per line" rule and allows for blank lines using a `newline` terminal.
+
+    ```ebnf
+    program    ::= { [ statement ] newline } exitStmt [ { newline } ] ;
+
+    statement  ::= decl | assign ;
+
+    decl       ::= "i32" [ "mut" ] ident "{" value "}" ;
+
+    assign     ::= ident ":=" expr ;
+
+    exitStmt   ::= "exit" [ value ] ;
+
+    expr       ::= value [ operand value ] ;
+
+    value      ::= number | ident ;
+
+    operand    ::= "+" | "-" | "*" ;
+
+    ```
+
+    ### Notes on the Grammar to Match Your Lexer:
+
+    * **Terminals:** `"i32"`, `"mut"`, `":="`, `"{"`, `"}"`, `"exit"`, `"+"`, `"-"`, `"*"` must exactly match the strings emitted by your lexer.
+    * **Lexer-Defined Tokens:** `ident`, `number`, and `newline` are non-quoted terminals. Your lexer is responsible for defining how names and numbers are spelled, and for passing line breaks (`\n`) as tokens so the grammar knows where lines end.
+    * **Blank Lines:** The `{ [ statement ] newline }` construct perfectly handles blank lines, as it allows a `newline` to appear without a `statement` preceding it.
+    * **Program Termination:** Enforcing that `exit` ends the program is handled strictly at the `program` level (a sequence of normal statements, capped off by an `exitStmt`).
+    * **Semantics excluded:** As requested, this grammar does *not* check if `ident` was declared, if it is mutable, or if variables are used before initialization. That is purely reserved for the AST walk (Task 3).
+}
+
+prompt:
+{
+    For each rule from list define a node class. Use inharatence if needed
+
+    here how node should work in code:
+    BinOpNode(tok.line, tok.col, tok.text, left, self.parse_operand())
+
+    list of rules:
+    value      ::= number | ident
+    operand    ::= "+" | "-" | "*"
+    expr       ::= value [ operand value ]
+    decl       ::= "i32" [ "mut" ] ident "{" expr "}"
+    assign     ::= ident ":=" expr
+    statement  ::= decl | assign | "\n"
+    exitStmt   ::= "exit" expr
+    program    ::= { statement } exitStmt
+
+    here is list of nodes and their hierarchy:
+    Node line, col of the node's first meaningful token
+    ├── ProgramNode statements: [StmtNode], exit: ExitNode
+    ├── StmtNode (abstract)
+    │ ├── DeclNode name, mutable, init: ExprNode
+    │ └── AssignNode name, value: ExprNode
+    2
+    ├── ExitNode value: ExprNode
+    └── ExprNode (abstract)
+    ├── BinOpNode op, left: ExprNode, right: ExprNode
+    ├── VarNode name
+    └── ConstNode value
+
+    add methods for correct printing like this:
+    Program
+    Decl x const
+    Const 0
+    Decl y mut
+    Const 10
+    Decl z const
+    BinOp +
+    Const 2
+    Const 5
+    Decl t mut
+    BinOp +
+    Var x
+    Const 10
+    Assign t
+    BinOp *
+    Var t
+    Var z
+    Exit
+    Var t
+}
+
+answer:
+{
+    Here is the Python code defining the AST node classes according to your hierarchy, complete with the requested `dump()` methods to achieve the exact pre-order printing format you specified.
+
+    ```python
+    class Node:
+        """Base class for all AST nodes."""
+        def __init__(self, line, col):
+            self.line = line
+            self.col = col
+
+        def dump(self):
+            """Recursively prints the AST in the requested format."""
+            raise NotImplementedError("Subclasses must implement dump()")
+
+
+    class ProgramNode(Node):
+        def __init__(self, line, col, statements, exit_node):
+            super().__init__(line, col)
+            self.statements = statements
+            self.exit = exit_node
+
+        def dump(self):
+            print("Program")
+            for stmt in self.statements:
+                stmt.dump()
+            self.exit.dump()
+
+
+    class StmtNode(Node):
+        """Abstract base class for statements."""
+        pass
+
+
+    class DeclNode(StmtNode):
+        def __init__(self, line, col, name, mutable, init):
+            super().__init__(line, col)
+            self.name = name          # String identifier
+            self.mutable = mutable    # Boolean
+            self.init = init          # ExprNode
+
+        def dump(self):
+            mut_str = "mut" if self.mutable else "const"
+            print(f"Decl {self.name} {mut_str}")
+            self.init.dump()
+
+
+    class AssignNode(StmtNode):
+        def __init__(self, line, col, name, value):
+            super().__init__(line, col)
+            self.name = name          # String identifier
+            self.value = value        # ExprNode
+
+        def dump(self):
+            print(f"Assign {self.name}")
+            self.value.dump()
+
+
+    class ExitNode(Node):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value        # ExprNode
+
+        def dump(self):
+            print("Exit")
+            self.value.dump()
+
+
+    class ExprNode(Node):
+        """Abstract base class for expressions."""
+        pass
+
+
+    class BinOpNode(ExprNode):
+        def __init__(self, line, col, op, left, right):
+            super().__init__(line, col)
+            self.op = op              # String (+, -, *)
+            self.left = left          # ExprNode
+            self.right = right        # ExprNode
+
+        def dump(self):
+            print(f"BinOp {self.op}")
+            self.left.dump()
+            self.right.dump()
+
+
+    class VarNode(ExprNode):
+        def __init__(self, line, col, name):
+            super().__init__(line, col)
+            self.name = name          # String identifier
+
+        def dump(self):
+            print(f"Var {self.name}")
+
+
+    class ConstNode(ExprNode):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value        # Integer / String
+
+        def dump(self):
+            print(f"Const {self.value}")
+
+    ```
+}
+
+prompt:
+{
+    Implement for each rule a parse method to build a tree. Use rules, list of nodes, skeleton (modifty it), errors list:
+
+    seleton:
+    from errors import CompileError
+    from lexer import Token
+    from nodes import Node, ProgramNode, StmtNode, DeclNode, AssignNode, ExitNode, ExprNode, BinOpNode, VarNode, ConstNode
+
+
+    class Parser:
+        def __init__(self, lines): # [[Token]] from the lexer
+            self.lines, self.toks, self.pos = lines, [], 0
+
+        def peek(self): # current token of the current line, or None
+            return self.toks[self.pos] if self.pos < len(self.toks) else None
+        
+        def eat(self):
+            tok = self.toks[self.pos]; self.pos += 1; return tok
+        
+        def expect(self, kind, what): # eat a token of this kind or report where it is missing
+            tok = self.peek()
+            if tok is None or tok.kind != kind: raise self.error(f"expected {what}")
+            return self.eat()
+        
+        def parse_program(self): # program ::= { statement } exit
+            stmts, exit_node = [], None
+            for toks in self.lines:
+                if not toks: continue # blank line
+                self.toks, self.pos = toks, 0
+                ... # exit? parse_exit; else parse_statement; then the line must be empty
+            return ProgramNode(..., stmts, exit_node)
+
+        def parse_decl(self): # decl ::= "i32" [ "mut" ] ident "{" value "}"
+            self.eat() # i32 — the caller looked at it already
+            mutable = self.peek() is not None and self.peek().kind == "mut"
+            if mutable: self.eat()
+            name = self.expect("ident", "a variable name")
+            ... # "{", parse_value, "}"
+            return DeclNode(name.line, name.col, name.text, mutable, init)
+        
+        def parse_value(self): # value ::= operand [ op operand ]
+            left = self.parse_operand()
+            tok = self.peek()
+            if tok is not None and tok.kind == "op":
+                self.eat()
+                return BinOpNode(tok.line, tok.col, tok.text, left, self.parse_operand())
+            return left
+
+    rules:
+    value      ::= number | ident
+    operand    ::= "+" | "-" | "*"
+    expr       ::= value [ operand value ]
+    decl       ::= "i32" [ "mut" ] ident "{" expr "}"
+    assign     ::= ident ":=" expr
+    statement  ::= decl | assign | "\n"
+    exitStmt   ::= "exit" expr
+    program    ::= { statement } exitStmt
+
+    nodes:
+    class Node:
+        """Base class for all AST nodes."""
+        def __init__(self, line, col):
+            self.line = line
+            self.col = col
+
+        def dump(self):
+            """Recursively prints the AST in the requested format."""
+            raise NotImplementedError("Subclasses must implement dump()")
+
+
+    class ProgramNode(Node):
+        def __init__(self, line, col, statements, exit_node):
+            super().__init__(line, col)
+            self.statements = statements
+            self.exit = exit_node
+
+        def dump(self):
+            print("Program")
+            for stmt in self.statements:
+                stmt.dump()
+            self.exit.dump()
+
+
+    class StmtNode(Node):
+        """Abstract base class for statements."""
+        pass
+
+
+    class DeclNode(StmtNode):
+        def __init__(self, line, col, name, mutable, init):
+            super().__init__(line, col)
+            self.name = name          # String identifier
+            self.mutable = mutable    # Boolean
+            self.init = init          # ExprNode
+
+        def dump(self):
+            mut_str = "mut" if self.mutable else "const"
+            print(f"Decl {self.name} {mut_str}")
+            self.init.dump()
+
+
+    class AssignNode(StmtNode):
+        def __init__(self, line, col, name, value):
+            super().__init__(line, col)
+            self.name = name          # String identifier
+            self.value = value        # ExprNode
+
+        def dump(self):
+            print(f"Assign {self.name}")
+            self.value.dump()
+
+
+    class ExitNode(Node):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value        # ExprNode
+
+        def dump(self):
+            print("Exit")
+            self.value.dump()
+
+
+    class ExprNode(Node):
+        """Abstract base class for expressions."""
+        pass
+
+
+    class BinOpNode(ExprNode):
+        def __init__(self, line, col, op, left, right):
+            super().__init__(line, col)
+            self.op = op              # String (+, -, *)
+            self.left = left          # ExprNode
+            self.right = right        # ExprNode
+
+        def dump(self):
+            print(f"BinOp {self.op}")
+            self.left.dump()
+            self.right.dump()
+
+
+    class VarNode(ExprNode):
+        def __init__(self, line, col, name):
+            super().__init__(line, col)
+            self.name = name          # String identifier
+
+        def dump(self):
+            print(f"Var {self.name}")
+
+
+    class ConstNode(ExprNode):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value        # Integer / String
+
+        def dump(self):
+            print(f"Const {self.value}")
+
+    error list:
+    Errors the parser reports
+    Each with the line:column of the token that broke the rule:
+    •
+    a statement that does not start with i32, a name or exit: line 3:1: cannot start a statement with '+'
+    •
+    a name not followed by :=: line 2:3: expected ':=' after 'x', got '5'
+    •
+    a declaration without {}: line 1:5: variable 'x' needs an initialiser in {}
+    •
+    something after a complete statement: line 1:10: unexpected '2' after the statement
+    •
+    a line that ends too early: line 2:9: expected a constant or a variable, found end of line
+    •
+    a statement after exit; a program without exit.
+    The exact wording is yours; the line:column and the exit code are not.
+
+    error file:
+    import sys
+
+    def CompileError(message):
+        print("compilation error: " + message, file=sys.stderr)
+        sys.exit(1)
+
+    task description from pdf:
+    peek and eat
+    The parser owns the tokens and an index of the current one. Two primitives do all the reading: peek() returns the current token without moving (or nothing if there is none), eat() returns it and moves the index on. Everything else is one method per grammar rule, parse_program, parse_statement, parse_decl, …, and the right side of the rule dictates the body:
+    •
+    a sequence ("i32" [ "mut" ] ident ...) — eat the parts in order, complain when the current token is not the one the rule expects;
+    •
+    alternatives (decl | assign) — look at peek() and pick: i32 starts a declaration, a name starts an assignment. One token of look-ahead decides every choice in this language;
+    •
+    [ x ] — an if on peek(); { x } — a while on peek().
+    If your lexer returns one vector of tokens per line, keep it: parse_program moves from line to line, and every other method works inside one line, where peek() returning nothing means “end of statement”. After a statement is parsed, the line must be empty — a leftover token is an error. If your lexer returns one flat vector, add an end-of-line token and check for it in the same place; both designs work.
+    The tree
+    The grammar dictates the classes as well as the functions. Where a rule says “either / or”, there is an abstract base with one subclass per alternative; where it says “this, then that”, there is a class whose fields are the parts that carry information. Quoted words disappear or become flags: mut becomes a boolean in the declaration, the braces and := leave nothing behind — the tree already says what they said.
+    Node line, col of the node's first meaningful token
+    ├── ProgramNode statements: [StmtNode], exit: ExitNode
+    ├── StmtNode (abstract)
+    │ ├── DeclNode name, mutable, init: ExprNode
+    │ └── AssignNode name, value: ExprNode
+    2
+    ├── ExitNode value: ExprNode
+    └── ExprNode (abstract)
+    ├── BinOpNode op, left: ExprNode, right: ExprNode
+    ├── VarNode name
+    └── ConstNode value
+    Every node keeps the line and column of the token it came from — the name for a declaration or an assignment, the operator for an operation. The walk in Task 3 has no tokens any more and still has to say where x is not mut.
+    A parse method returns a node: parse_decl returns a DeclNode whose init is whatever parse_value returned; parse_program collects the statement nodes and the exit node into a ProgramNode. The tree holds names, numbers, flags and child nodes — never a token.
+    The dump
+    --ast prints the tree, one node per line, children indented by two spaces under their parent. For the valid program of Practice 2:
+    Program
+    Decl x const
+    Const 0
+    Decl y mut
+    Const 10
+    Decl z const
+    BinOp +
+    Const 2
+    Const 5
+    Decl t mut
+    BinOp +
+    Var x
+    Const 10
+    Assign t
+    BinOp *
+    Var t
+    Var z
+    Exit
+    Var t
+    The wording of a line is yours; the shape is not. Write the dump as a method of the base class that prints its own label and then calls the children — the first walk over the tree, and the cheapest test you will have all week.
+    Errors the parser reports
+    Each with the line:column of the token that broke the rule:
+    •
+    a statement that does not start with i32, a name or exit: line 3:1: cannot start a statement with '+'
+    •
+    a name not followed by :=: line 2:3: expected ':=' after 'x', got '5'
+    •
+    a declaration without {}: line 1:5: variable 'x' needs an initialiser in {}
+    •
+    something after a complete statement: line 1:10: unexpected '2' after the statement
+    •
+    a line that ends too early: line 2:9: expected a constant or a variable, found end of line
+    •
+    a statement after exit; a program without exit.
+    The exact wording is yours; the line:column and the exit code are not.
+    Rules
+    •
+    The parser is written by hand: peek, eat, and one function per rule. No parser generators, no regular expressions over the token list, no eval.
+    •
+    One token of look-ahead. The parser looks at the current token and decides; it does not scan the rest of the line for an operator or count the tokens first.
+    •
+    The parser reads tokens, never the source text. The tree holds no tokens.
+
+    WARNING:
+    Get --ast right before you touch the builder. Feed the parser the Practice 2 programs and read the trees; then feed it every error above and read the positions. A parser bug found here costs a minute. The same bug found as a wrong number after lli costs the afternoon.
+
+
+    --ast will be parsed and added in the main file later
+}
+
+answer:
+{
+    Here is the complete implementation of the `Parser` class along with the slightly modified `Node` hierarchy to correctly support the two-space indentation for the `--ast` dump, just as described in the requirements.
+
+    This correctly models the EBNF, uses exactly one token of look-ahead, builds an AST containing absolutely no token references, and raises the exact error messages with precise `line:col` accuracy.
+
+    ### Parser & Modified AST Nodes (Python)
+
+    ```python
+    import sys
+    from errors import CompileError
+
+    # Assume Lexer provides tokens with: tok.kind, tok.text, tok.line, tok.col
+    # Example kinds: "i32", "mut", "ident", "{", "}", ":=", "number", "exit", "+", "-", "*"
+
+    # --- AST NODES ---
+
+    class Node:
+        """Base class for all AST nodes."""
+        def __init__(self, line, col):
+            self.line = line
+            self.col = col
+
+        def dump(self, indent=0):
+            """Recursively prints the AST in the requested format with 2-space indentation."""
+            raise NotImplementedError("Subclasses must implement dump()")
+
+
+    class ProgramNode(Node):
+        def __init__(self, line, col, statements, exit_node):
+            super().__init__(line, col)
+            self.statements = statements
+            self.exit = exit_node
+
+        def dump(self, indent=0):
+            print("  " * indent + "Program")
+            for stmt in self.statements:
+                stmt.dump(indent + 1)
+            self.exit.dump(indent + 1)
+
+
+    class StmtNode(Node):
+        pass
+
+
+    class DeclNode(StmtNode):
+        def __init__(self, line, col, name, mutable, init):
+            super().__init__(line, col)
+            self.name = name          
+            self.mutable = mutable    
+            self.init = init          
+
+        def dump(self, indent=0):
+            mut_str = "mut" if self.mutable else "const"
+            print("  " * indent + f"Decl {self.name} {mut_str}")
+            self.init.dump(indent + 1)
+
+
+    class AssignNode(StmtNode):
+        def __init__(self, line, col, name, value):
+            super().__init__(line, col)
+            self.name = name          
+            self.value = value        
+
+        def dump(self, indent=0):
+            print("  " * indent + f"Assign {self.name}")
+            self.value.dump(indent + 1)
+
+
+    class ExitNode(Node):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value        
+
+        def dump(self, indent=0):
+            print("  " * indent + "Exit")
+            self.value.dump(indent + 1)
+
+
+    class ExprNode(Node):
+        pass
+
+
+    class BinOpNode(ExprNode):
+        def __init__(self, line, col, op, left, right):
+            super().__init__(line, col)
+            self.op = op              
+            self.left = left          
+            self.right = right        
+
+        def dump(self, indent=0):
+            print("  " * indent + f"BinOp {self.op}")
+            self.left.dump(indent + 1)
+            self.right.dump(indent + 1)
+
+
+    class VarNode(ExprNode):
+        def __init__(self, line, col, name):
+            super().__init__(line, col)
+            self.name = name          
+
+        def dump(self, indent=0):
+            print("  " * indent + f"Var {self.name}")
+
+
+    class ConstNode(ExprNode):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value        
+
+        def dump(self, indent=0):
+            print("  " * indent + f"Const {self.value}")
+
+
+    # --- PARSER ---
+
+    class Parser:
+        def __init__(self, lines):
+            # lines is a list of lists of tokens: [[Token, Token], [Token], ...]
+            self.lines = lines
+            self.toks = []
+            self.pos = 0
+            self.current_line_num = 1
+            self.last_col = 1
+
+        def error(self, message):
+            """Raises a CompileError with the line and column of the error."""
+            if self.pos < len(self.toks):
+                tok = self.toks[self.pos]
+                line, col = tok.line, tok.col
+            else:
+                line = self.current_line_num
+                col = self.last_col
+            CompileError(f"line {line}:{col}: {message}")
+
+        def peek(self):
+            return self.toks[self.pos] if self.pos < len(self.toks) else None
+        
+        def eat(self):
+            tok = self.toks[self.pos]
+            self.pos += 1
+            # Update last_col dynamically so end-of-line errors point right after the last token
+            self.last_col = tok.col + len(tok.text)
+            return tok
+        
+        def expect(self, kind, what):
+            tok = self.peek()
+            if tok is None:
+                self.error(f"expected {what}, found end of line")
+            if tok.kind != kind:
+                self.error(f"expected {what}, got '{tok.text}'")
+            return self.eat()
+        
+        def parse_program(self):
+            stmts = []
+            exit_node = None
+
+            for toks in self.lines:
+                if not toks: 
+                    continue # Skip pure blank lines
+
+                self.toks, self.pos = toks, 0
+                self.current_line_num = toks[0].line
+                # Default end of line column fallback if line fails immediately
+                self.last_col = toks[-1].col + len(toks[-1].text) 
+                
+                if exit_node is not None:
+                    self.error("statement after exit")
+
+                tok = self.peek()
+                if tok.kind == "exit":
+                    exit_node = self.parse_exitStmt()
+                else:
+                    stmts.append(self.parse_statement())
+
+                if self.peek() is not None:
+                    self.error(f"unexpected '{self.peek().text}' after the statement")
+
+            if exit_node is None:
+                CompileError(f"line {self.current_line_num}:{self.last_col}: program without exit")
+
+            start_line = stmts[0].line if stmts else exit_node.line
+            start_col = stmts[0].col if stmts else exit_node.col
+            return ProgramNode(start_line, start_col, stmts, exit_node)
+
+        def parse_statement(self):
+            tok = self.peek()
+            if tok is None:
+                self.error("expected a statement, found end of line")
+            
+            if tok.kind == "i32":
+                return self.parse_decl()
+            elif tok.kind == "ident":
+                return self.parse_assign()
+            else:
+                self.error(f"cannot start a statement with '{tok.text}'")
+
+        def parse_decl(self):
+            tok = self.eat() # Eat "i32"
+            mutable = False
+            
+            if self.peek() is not None and self.peek().kind == "mut":
+                self.eat()
+                mutable = True
+                
+            name = self.expect("ident", "a variable name")
+            
+            if self.peek() is None or self.peek().kind != "{":
+                self.error(f"variable '{name.text}' needs an initialiser in {{}}")
+            self.eat() # Eat "{"
+            
+            init = self.parse_expr()
+            self.expect("}", "'}'")
+            
+            return DeclNode(name.line, name.col, name.text, mutable, init)
+
+        def parse_assign(self):
+            name = self.eat() # We know it's ident from parse_statement
+            
+            tok = self.peek()
+            if tok is None or tok.kind != ":=":
+                got = f"'{tok.text}'" if tok else "end of line"
+                self.error(f"expected ':=' after '{name.text}', got {got}")
+            self.eat() # Eat ":="
+            
+            value = self.parse_expr()
+            return AssignNode(name.line, name.col, name.text, value)
+
+        def parse_exitStmt(self):
+            tok = self.eat() # Eat "exit"
+            value = self.parse_expr()
+            return ExitNode(tok.line, tok.col, value)
+
+        def parse_expr(self):
+            left = self.parse_value()
+            
+            tok = self.peek()
+            if tok is not None and tok.kind in ("+", "-", "*"):
+                op_tok = self.eat()
+                right = self.parse_value()
+                return BinOpNode(op_tok.line, op_tok.col, op_tok.text, left, right)
+                
+            return left
+
+        def parse_value(self):
+            tok = self.peek()
+            if tok is None:
+                self.error("expected a constant or a variable, found end of line")
+                
+            if tok.kind == "number":
+                self.eat()
+                return ConstNode(tok.line, tok.col, int(tok.text))
+            elif tok.kind == "ident":
+                self.eat()
+                return VarNode(tok.line, tok.col, tok.text)
+            else:
+                self.error(f"expected a constant or a variable, got '{tok.text}'")
+
+    ```
+}
+
+prompt:
+{
+    Now write a CodeGen class that is a visitor and builds a code from a ProgramNode:
+
+    it in one walk goes down it and emits the IR. 
+    A visitor. A class CodeGen with one method per node kind — visit_program, visit_decl, visit_assign, visit_exit, visit_binop, visit_var, visit_const — and a method accept(visitor) on every node that calls the right one: BinOpNode.accept calls visitor.visit_binop(self). The nodes know nothing about IR; a second walk (a printer, a checker) is a second class.
+    Statement nodes return nothing and expression nodes return the value the builder produced for them: visit_binop asks left and right for their values first, then emits add, sub or mul on the results — operands before the operation, bottom-up. visit_var is a load, visit_const is a constant, visit_decl is an alloca and a store of what init returned, visit_exit is the printf call and ret. The symbol table and the three checks — declared before use, declared once, mut before := — stay in this walk, exactly where they were; the error position now comes from the node, not from a token.
+    Nothing about the IR changes. The valid program of Practice 2 must still print Program exit with result 70.
+
+    here list of nodes and their methods (tree starts at programnode):
+    class Node:
+        def __init__(self, line, col):
+            self.line = line
+            self.col = col
+
+        def dump(self, indent=0):
+            raise NotImplementedError()
+
+        def accept(self, visitor):
+            raise NotImplementedError()
+
+    class ProgramNode(Node):
+        def __init__(self, line, col, statements, exit_node):
+            super().__init__(line, col)
+            self.statements = statements
+            self.exit = exit_node
+
+        def dump(self, indent=0):
+            print("  " * indent + "Program")
+            for stmt in self.statements:
+                stmt.dump(indent + 1)
+            self.exit.dump(indent + 1)
+
+        def accept(self, visitor):
+            return visitor.visit_program(self)
+
+    class StmtNode(Node): pass
+
+    class DeclNode(StmtNode):
+        def __init__(self, line, col, name, mutable, init):
+            super().__init__(line, col)
+            self.name = name
+            self.mutable = mutable
+            self.init = init
+
+        def dump(self, indent=0):
+            mut_str = "mut" if self.mutable else "const"
+            print("  " * indent + f"Decl {self.name} {mut_str}")
+            self.init.dump(indent + 1)
+
+        def accept(self, visitor):
+            return visitor.visit_decl(self)
+
+    class AssignNode(StmtNode):
+        def __init__(self, line, col, name, value):
+            super().__init__(line, col)
+            self.name = name
+            self.value = value
+
+        def dump(self, indent=0):
+            print("  " * indent + f"Assign {self.name}")
+            self.value.dump(indent + 1)
+
+        def accept(self, visitor):
+            return visitor.visit_assign(self)
+
+    class ExitNode(Node):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value
+
+        def dump(self, indent=0):
+            print("  " * indent + "Exit")
+            self.value.dump(indent + 1)
+
+        def accept(self, visitor):
+            return visitor.visit_exit(self)
+
+    class ExprNode(Node): pass
+
+    class BinOpNode(ExprNode):
+        def __init__(self, line, col, op, left, right):
+            super().__init__(line, col)
+            self.op = op
+            self.left = left
+            self.right = right
+
+        def dump(self, indent=0):
+            print("  " * indent + f"BinOp {self.op}")
+            self.left.dump(indent + 1)
+            self.right.dump(indent + 1)
+
+        def accept(self, visitor):
+            return visitor.visit_binop(self)
+
+    class VarNode(ExprNode):
+        def __init__(self, line, col, name):
+            super().__init__(line, col)
+            self.name = name
+
+        def dump(self, indent=0):
+            print("  " * indent + f"Var {self.name}")
+
+        def accept(self, visitor):
+            return visitor.visit_var(self)
+
+    class ConstNode(ExprNode):
+        def __init__(self, line, col, value):
+            super().__init__(line, col)
+            self.value = value
+
+        def dump(self, indent=0):
+            print("  " * indent + f"Const {self.value}")
+
+        def accept(self, visitor):
+            return visitor.visit_const(self)
+
+
+    in the main code:
     import argparse
+    from os import name
     import sys
     from llvmlite import ir
     import llvmlite.binding as llvm
 
-    variables = {} # name -> alloca
+    from errors import CompileError
+    from lexer import lex
+    from parser import Parser
 
-    def compilation_error(line, message):
-        print(f"compilation error: line {line}: {message}", file=sys.stderr)
-        sys.exit(1)
-
-    def is_valid_int(val: str):
-        # Supports both "5" and "-5"
-        return val.isdigit() or (val.startswith("-") and val[1:].isdigit())
-
-    def declarateVar(builder, name: str, lineCnt):
-        if len(name.split()) > 1: 
-            compilation_error(lineCnt, "extra symbols after declaration")
-
-        if not (name[0].isalpha() or name[0] == "_"): 
-            compilation_error(lineCnt, "variable must start with letter or _")
-
-        for symbol in name: 
-            if not (symbol.isalpha() or symbol.isdigit() or symbol == "_"):
-                compilation_error(lineCnt, "variable can contain only letters, digits and _")
-
-        if name == "int" or name == "exit": 
-            compilation_error(lineCnt, "word reserved")
-
-        if name in variables: 
-            compilation_error(lineCnt, "variable already declared")
-
-        variables[name] = builder.alloca(I32, name=name)
-
-    def defineVar(builder, line: str, lineCnt):
-        line = line.replace(" ", "")
-
-        if ":=" not in line:
-            compilation_error(lineCnt, "uncomplete definition, :=")
-
-        tokens = line.split(":=")
-
-        if len(tokens) != 2:  
-            compilation_error(lineCnt, "too many definitions in one line")
-
-        name = tokens[0]
-        expr = tokens[1]
-        
-        if name not in variables:  
-            compilation_error(lineCnt, "unknown variable")
-
-        val1_str = ""
-        val2_str = ""
-        opr = ""
-        
-        for symbol in expr:
-            if symbol in {"+", "-", "*"}:
-                # Handle negative numbers at the start of expression (e.g., x := -5)
-                if symbol == "-" and val1_str == "":
-                    val1_str += symbol
-                    continue
-                    
-                if opr:
-                    compilation_error(lineCnt, "too many operations")
-                opr = symbol
-                continue
-
-            if not (symbol.isalpha() or symbol.isdigit() or symbol == "_"):
-                compilation_error(lineCnt, "wrong symbols")
-
-            if opr: 
-                val2_str += symbol
-            else:
-                val1_str += symbol
-
-        # --- Convert string 1 to LLVM ---
-        if val1_str in variables:
-            val1_ir = builder.load(variables[val1_str])
-        else:
-            if not is_valid_int(val1_str):
-                compilation_error(lineCnt, "value has to be variable or int")
-            val1_ir = ir.Constant(I32, int(val1_str))
-
-        # If simple assignment
-        if opr == "":
-            builder.store(val1_ir, variables[name])
-            return
-
-        # --- Convert string 2 to LLVM ---
-        if val2_str in variables:
-            val2_ir = builder.load(variables[val2_str])
-        else:
-            if not is_valid_int(val2_str):
-                compilation_error(lineCnt, "value has to be variable or int")
-            val2_ir = ir.Constant(I32, int(val2_str))
-
-        # Apply operations
-        if opr == "+":
-            builder.store(builder.add(val1_ir, val2_ir), variables[name])
-        elif opr == "-":
-            builder.store(builder.sub(val1_ir, val2_ir), variables[name])
-        elif opr == "*":
-            builder.store(builder.mul(val1_ir, val2_ir), variables[name])
-        else:
-            compilation_error(lineCnt, "wrong definition")
-
-
-    def exitProgram(builder, value: str, lineCnt):
-        if is_valid_int(value):
-            builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), ir.Constant(I32, int(value))])
-            builder.ret(ir.Constant(I32, 0))
-            return
-
-        if value in variables:
-            builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), builder.load(variables[value])])
-            builder.ret(ir.Constant(I32, 0))
-            return
-
-        compilation_error(lineCnt, "program must return value")
-
+    def CompileError(message):
+        print("compilation error: " + message, file=sys.stderr)
+        sys.exit(1)
 
     parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
     parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
     parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
+    parser.add_argument("--tokens", action="store_true", help="Print the generated tokens")
+    parser.add_argument("--ast", action="store_true", help="Print the generated AST")
     args = parser.parse_args()
 
     I32, I8 = ir.IntType(32), ir.IntType(8)
@@ -141,1125 +903,146 @@ promprt:
     fmt.linkage, fmt.global_constant = "private", True
     fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
 
-    lineCnt = 0
-    exitCalls = 0
+    lines = []
+    with open(args.input, "rb") as fp:
+        lines = lex(fp.read())
 
-    with open(args.input, "r") as fp:
-        for raw_line in fp:
-            lineCnt += 1
-            
-            # Prevent empty line crashes
-            if not raw_line.strip():
-                continue
-                
-            line = " ".join(raw_line.split()) + "\n"
+    if args.tokens:
+        for line_tokens in lines:
+            for token in line_tokens:
+                print(token)
 
-            if exitCalls != 0:
-                compilation_error(lineCnt, "exit has been called")
+    parser = Parser(lines)
+    program = parser.parse_program()
+    if args.ast:
+        program.dump()
 
-            token = ""
-            for i in range(len(line)):
-                if line[i] == " ":
-                    if token == "int":
-                        declarateVar(builder, line[i+1:].strip(), lineCnt)
-                        break
-                    elif token == "exit":
-                        exitProgram(builder, line[i+1:].strip(), lineCnt)
-                        exitCalls += 1
-                        break
-                elif line[i] == ":":
-                    defineVar(builder, line.strip(), lineCnt)
-                    break
-                elif line[i] == "\n":
-                    compilation_error(lineCnt, "no valid action")
-                
-                token += line[i]
-
-    if exitCalls != 1:
-        compilation_error(lineCnt, "program must exit once")
+    sys.exit(0)  # Exit to check task 1 and 2
 
     with open(args.output, "w") as f:
-        f.write(str(module))
-
-
-    #!/bin/bash
-
-    COMPILER="python3 compiler.py"
-    PASS_DIR="tests/pass"
-    FAIL_DIR="tests/fail"
-    OUTPUT_LL="test_output.ll"
-
-    passed=0
-    failed=0
-
-    echo "Running Compiler Tests..."
-    echo "========================="
-
-    echo "Testing valid programs (Expected exit 0 and matching output):"
-    for test_file in "$PASS_DIR"/*.txt; do
-            expected_file="${test_file%.txt}.expected"
-                
-                ERROR_MSG=$($COMPILER "$test_file" "$OUTPUT_LL" 2>&1 >/dev/null)
-                compilation_exit_code=$?
-
-                    if [ $compilation_exit_code -eq 0 ]; then
-                            if command -v lli >/dev/null 2>&1; then
-                                        ACTUAL_OUTPUT=$(lli "$OUTPUT_LL")
-                                                
-                                                if [ -f "$expected_file" ]; then
-                                                            EXPECTED_OUTPUT=$(cat "$expected_file")
-                                                                    
-                                                                    if [ "$ACTUAL_OUTPUT" = "$EXPECTED_OUTPUT" ]; then
-                                                                                    echo "  ✅ [PASS] $test_file (Compiled & Output Matched)"
-                                                                                                passed=$((passed + 1))
-                                                                                                    else
-                                                                                                                    echo "  ❌ [FAIL] $test_file (Output Mismatch)"
-                                                                                                                                echo "     Expected: '$EXPECTED_OUTPUT'"
-                                                                                                                                        echo "     Got:      '$ACTUAL_OUTPUT'"
-                                                                                                                                                    failed=$((failed + 1))
-                                                                                                                                                        fi
-                                                                                                                                                            else
-                                                                                                                                                                            echo "  ⚠️ [WARN] $test_file (Compiled, but $expected_file is missing)"
-                                                                                                                                                                                    passed=$((passed + 1))
-                                                                                                                                                                                        fi
-                                                                                                                                                                                        else
-                                                                                                                                                                                                     echo "  ⚠️ [WARN] lli command not found. Skipping execution phase for $test_file."
-                                                                                                                                                                                                              passed=$((passed + 1))
-                                                                                                                                                                                                              fi
-                                                                                                                                                                                                              else
-                                                                                                                                                                                                                          echo "  ❌ [FAIL] $test_file (Failed to compile)"
-                                                                                                                                                                                                                              echo "     Output: $ERROR_MSG"
-                                                                                                                                                                                                                                  failed=$((failed + 1))
-                                                                                                                                                                                                                                  fi
-                                                                                                                                                                                                                          done
-
-                                                                                                                                                                                                                          echo "-------------------------"
-
-                                                                                                                                                                                                                          echo "Testing invalid programs (Expected compilation error):"
-                                                                                                                                                                                                                          for test_file in "$FAIL_DIR"/*.txt; do
-                                                                                                                                                                                                                                  ERROR_MSG=$($COMPILER "$test_file" "$OUTPUT_LL" 2>&1 >/dev/null)
-                                                                                                                                                                                                                                      compilation_exit_code=$?
-
-                                                                                                                                                                                                                                      if [ $compilation_exit_code -ne 0 ]; then
-                                                                                                                                                                                                                                                  echo "  ✅ [PASS] $test_file correctly failed."
-                                                                                                                                                                                                                                                      echo "     -> Caught: $ERROR_MSG"
-                                                                                                                                                                                                                                                          passed=$((passed + 1))
-                                                                                                                                                                                                                                                          else
-                                                                                                                                                                                                                                                                  echo "  ❌ [FAIL] $test_file incorrectly compiled! (Expected an error)"
-                                                                                                                                                                                                                                                                      failed=$((failed + 1))
-                                                                                                                                                                                                                                                                      fi
-                                                                                                                                                                                                                                                                  done
-
-                                                                                                                                                                                                                                                                  rm -f "$OUTPUT_LL"
-
-                                                                                                                                                                                                                                                                  echo "========================="
-                                                                                                                                                                                                                                                                  echo "Test Summary: $passed passed, $failed failed."
-
-                                                                                                                                                                                                                                                                  if [ $failed -ne 0 ]; then
-                                                                                                                                                                                                                                                                          exit 1
-                                                                                                                                                                                                                                                                  else
-                                                                                                                                                                                                                                                                          exit 0
-                                                                                                                                                                                                                                                                  fi
-
-
-
-    склади покроковий детальний план імплементації для цієї практики (укр)
+        f.write(str(module))
 }
+
 answer:
 {
-    ## Етап 1: Підготовка репозиторію та структури проєкту
-
-    1. Створіть Git-репозиторій (на GitHub або GitLab) для компілятора.
-
-
-    2. Закомітьте існуючий код із першої практики як найперший коміт.
-
-
-    3. Створіть нову гілку з назвою `practice-2` для виконання цього завдання.
-
-
-    4. Додайте або оновіть файл `README.md` з інструкціями щодо запуску компілятора та виконання тестів.
-
-
-    5. Підготуйте директорію `tests/`, де будуть зберігатися ваші тестові файли.
-
-
-
-    ## Етап 2: Реалізація лексера (State Machine)
-
-    1. Створіть клас `Token`, який міститиме такі обов'язкові атрибути: `kind` (тип), `text` (текст), `line` (рядок), `column` (колонка). Точні координати потрібні для правильного формування повідомлень про помилки на наступних етапах.
-
-
-    2. Напишіть функцію `lex(data: bytes)`, яка побайтово обробляє вхідний файл у циклі. **Суворо заборонено** використовувати регулярні вирази, методи на кшталт `str.split()`, `strtok` або генератори лексерів (наприклад, flex).
-
-
-    3. Побудуйте логіку машини станів (State Machine), яка читає один байт, оцінює його клас і поточний стан (наприклад, `START`, `IDENT`, `NUMBER`), після чого перемикає стан або додає сформований токен.
-
-
-    4. Розпізнавайте такі категорії токенів:
-    * `identifier`: імена, що не починаються з цифри та не є ключовими словами.
-
-
-    * `keyword`: зарезервовані слова `i32`, `mut`, `exit`.
-
-
-    * `number`: лише десяткові цифри без знака.
-
-
-    * `operator`: оператор присвоєння (`:=`) та арифметичні знаки (`+`, `-`, `*`).
-
-
-    * `block`: дужки для ініціалізатора `{` та `}`.
-
-
-    * `end of line`: символ `\n`.
-
-
-
-
-    5. Реалізуйте ігнорування пробілів та табуляцій, а також додайте обробку лексичних помилок (наприклад, невідомий байт `$` або незакрита дужка `{` на поточному рядку). Помилки мають виводитись у `stderr` у форматі `line:column`.
-
-
-    6. Організуйте збереження токенів у список або список списків (по одному списку токенів на рядок).
-
-
-    7. Протестуйте лексер ізольовано: роздрукуйте отриманий список токенів для кількох тестових файлів, щоб переконатися в коректності його роботи перед зміною генератора IR.
-
-
-
-    ## Етап 3: Синтаксичний та семантичний аналіз
-
-    1. Перепишіть основний цикл компілятора так, щоб він працював з масивом токенів, згенерованим лексером, а не з рядками вихідного коду. Логіка перевірок більше не повинна читати сирцевий текст.
-
-
-    2. Реалізуйте парсинг оновленого синтаксису:
-    * Декларація константи: `i32 x { 5 }`.
-
-
-    * Декларація змінної: `i32 mut y { 10 }` (усі змінні вважаються незмінними, якщо немає слова `mut`).
-
-
-    * Операція присвоєння: `y := x + 3`.
-
-
-    * Вихід з програми: `exit y` (останній рядок, приймає константу або змінну).
-
-
-
-
-    3. Додайте обробку арифметичних виразів, які містять не більше однієї операції (`+`, `-`, `*`) між двома константами або змінними, що знаходяться всередині ініціалізатора `{}` або після `:=`.
-
-
-    4. Додайте суворі семантичні перевірки, кожна з яких повинна вказувати `line:column` токена, що викликав помилку:
-    * Змінна повинна бути задекларована перед першим використанням.
-
-
-    * Присвоювати значення можна лише змінним, задекларованим з ключовим словом `mut`.
-
-
-    * Заборонено повторне декларування змінної з таким самим ім'ям.
-
-
-    * Ініціалізатор у фігурних дужках `{}` є обов'язковим для кожної декларації.
-
-
-
-
-
-    ## Етап 4: Генерація коду (LLVM IR)
-
-    1. Залиште механізм генерації IR на основі API `llvmlite.ir`, як це було у попередній практиці. Генерація тексту IR вручну через склеювання рядків оцінюється в 0 балів за друге завдання.
-
-
-    2. Зв'яжіть нові синтаксичні правила з відповідними LLVM-інструкціями:
-    * Декларація змінної компілюється в інструкцію `alloca`, після чого слідує `store` для запису ініціалізатора.
-
-
-    * Операція присвоєння викликає інструкцію `store`.
-
-
-    * Будь-яке читання значення змінної викликає інструкцію `load`.
-
-
-    * Команда `exit` компілюється у виклик `printf` та подальшу інструкцію `ret`.
-
-
-
-
-    3. Налаштуйте поведінку програми у разі помилки: компілятор має негайно завершувати роботу з ненульовим кодом помилки та не створювати вихідний файл `.ll`.
-
-
-
-    ## Етап 5: Тестування та здача проєкту
-
-    1. Наповніть папку `tests/` мінімум 10 тестовими файлами: щонайменше 5 програм, які компілюються успішно, і 5 таких, що повинні падати з помилкою.
-
-
-    2. Біля кожного тестового файлу створіть додатковий файл з очікуваним виводом (або текстом повідомлення про помилку).
-
-
-    3. Переконайтеся, що тести покривають ключові сценарії: декларацію констант та `mut` змінних, роботу ініціалізаторів з операціями, некоректні відступи, невідомі байти, використання до декларації, відсутність ініціалізатора та спробу зміни константи.
-
-
-    4. Створіть Pull Request із гілки `practice-2` у гілку `main`.
-
-
-    5. Додайте користувача `vovaskochko` як рецензента (reviewer) до вашого Pull Request. Якщо репозиторій приватний, надайте викладачу доступ на читання.
-
-
-    6. Підготуйте текстовий файл `ai_usage.txt` із журналом використання AI.
-
-
-    7. Для фінальної здачі завантажте в систему Moodle два посилання (на репозиторій та на Pull Request), а також файл `ai_usage.txt`. Після завершення перевірки змерджіть Pull Request у `main`.
+    Here is the `CodeGen` visitor class that traverses the AST and generates the LLVM IR. It maintains a symbol table for variables and performs the required semantic checks (declaration before use, no redeclarations, and mutability before assignment).
+
+    ```python
+    from llvmlite import ir
+    from errors import CompileError
+
+    class CodeGen:
+        def __init__(self, builder, printf_func, fmt_str):
+            self.builder = builder
+            self.printf = printf_func
+            self.fmt = fmt_str
+            self.env = {}  # Maps name -> {"ptr": ptr, "mutable": bool}
+
+        def error(self, node, message):
+            raise CompileError(f"line {node.line}:{node.col}: {message}")
+
+        def visit_program(self, node):
+            for stmt in node.statements:
+                stmt.accept(self)
+            node.exit.accept(self)
+
+        def visit_decl(self, node):
+            if node.name in self.env:
+                self.error(node, f"variable '{node.name}' is already declared")
+                
+            init_val = node.init.accept(self)
+            
+            # Allocate stack space and store the initial value
+            ptr = self.builder.alloca(ir.IntType(32), name=node.name)
+            self.builder.store(init_val, ptr)
+            
+            # Save to symbol table
+            self.env[node.name] = {"ptr": ptr, "mutable": node.mutable}
+
+        def visit_assign(self, node):
+            if node.name not in self.env:
+                self.error(node, f"variable '{node.name}' is not declared")
+                
+            var_info = self.env[node.name]
+            if not var_info["mutable"]:
+                self.error(node, f"cannot assign to constant variable '{node.name}'")
+                
+            val = node.value.accept(self)
+            self.builder.store(val, var_info["ptr"])
+
+        def visit_exit(self, node):
+            val = node.value.accept(self)
+            
+            # Cast the format string array to an i8* pointer for printf
+            fmt_ptr = self.builder.bitcast(self.fmt, ir.PointerType(ir.IntType(8)))
+            self.builder.call(self.printf, [fmt_ptr, val])
+            
+            # Return 0 from main
+            self.builder.ret(ir.Constant(ir.IntType(32), 0))
+
+        def visit_binop(self, node):
+            left = node.left.accept(self)
+            right = node.right.accept(self)
+            
+            if node.op == "+":
+                return self.builder.add(left, right, name="addtmp")
+            elif node.op == "-":
+                return self.builder.sub(left, right, name="subtmp")
+            elif node.op == "*":
+                return self.builder.mul(left, right, name="multmp")
+            else:
+                self.error(node, f"unknown operator '{node.op}'")
+
+        def visit_var(self, node):
+            if node.name not in self.env:
+                self.error(node, f"variable '{node.name}' is not declared")
+                
+            ptr = self.env[node.name]["ptr"]
+            return self.builder.load(ptr, name=node.name)
+
+        def visit_const(self, node):
+            return ir.Constant(ir.IntType(32), node.value)
+
+    ```
+
+    ### Integration into the main file
+
+    Replace `sys.exit(0) # Exit to check task 1 and 2` in your main script with the visitor execution:
+
+    ```python
+    parser = Parser(lines)
+    program = parser.parse_program()
+    if args.ast:
+        program.dump()
+        sys.exit(0)  # Only stop here if we specifically asked for the AST
+
+    # --- Task 3: Walk the AST and generate IR ---
+    codegen = CodeGen(builder, printf, fmt)
+    program.accept(codegen)
+
+    # Write the final LLVM IR to the output file
+    with open(args.output, "w") as f:
+        f.write(str(module))
+
+    ```
 }
 
 prompt:
-generate 5 test cases
+{
+
+}
 
 answer:
-Ось 5 тестових сценаріїв, які покривають основні синтаксичні та семантичні правила другої практики.
-
-**1. Успішна компіляція: Декларація константи та вихід**
-Цей тест перевіряє базове оголошення незмінної змінної та використання її у команді виходу.
-
-* **Файл коду (`test1.txt`):**
-```text
-i32 x { 42 }
-exit x
-
-```
-
-
-* **Очікуваний результат (`test1.expected`):**
-```text
-Program exit with result 42
-
-```
-
-
-
-**2. Успішна компіляція: Mutable змінна та арифметичні операції**
-Перевіряє оголошення `mut` змінної, ініціалізацію з використанням іншої константи, математичну операцію (`+`) та присвоєння.
-
-* **Файл коду (`test2.txt`):**
-```text
-i32 a { 10 }
-i32 mut b { a + 5 }
-b := b * 2
-exit b
-
-```
-
-
-* **Очікуваний результат (`test2.expected`):**
-```text
-Program exit with result 30
-
-```
-
-
-
-**3. Помилка: Присвоєння значення константі**
-Перевіряє семантичну помилку спроби змінити значення змінної, яка не була задекларована з ключовим словом `mut`.
-
-* **Файл коду (`test3.txt`):**
-```text
-i32 x { 5 }
-x := 10
-exit x
-
-```
-
-
-* **Очікуваний вивід у `stderr`:**
-```text
-compilation error: line 2:1: cannot assign to 'x': it is not mut
-
-```
-
-
-
-**4. Помилка: Використання змінної до її декларації**
-Перевіряє правило, згідно з яким змінна повинна бути задекларована перед першим використанням (в ініціалізаторі, присвоєнні або `exit`).
-
-* **Файл коду (`test4.txt`):**
-```text
-i32 mut y { x + 10 }
-i32 x { 5 }
-exit y
-
-```
-
-
-* **Очікуваний вивід у `stderr`:**
-```text
-compilation errorWhat specific application, feature, or function would you like these test cases for? 
-
-
-```
-
-
-
-Once you let me know the subject (e.g., a login screen, a sorting algorithm, a checkout process, or a physical product), I can generate five tailored test cases for you.
-
-link: https://share.gemini.google/rHt5wcXVTFuG
-promprt:
-analyze, check and grade task 1:
-import argparse
-import sys
-from llvmlite import ir
-import llvmlite.binding as llvm
-
-KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
-
-def CompileError(message):
-    print(message, file=sys.stderr)
-    sys.exit(1)
-
-class Token:
-    def __init__(self, kind, text, line, col):
-        self.kind = kind
-        self.text = text
-        self.line = line
-        self.col = col
-
-    def __repr__(self):
-        return f"Token({self.kind}, '{self.text}', {self.line}:{self.col})"
-
-def is_alpha(b):
-    if b > 127: return False
-    return b is not None and (chr(b).isalpha() or chr(b) == '_')
-
-def is_digit(b):
-    if b > 127: return False
-    return b is not None and chr(b).isdigit()
-
-def lex(data: bytes):
-    lines, tokens = [], []
-    state, start, line, col = "START", 0, 1, 1
-    blocks = 0
-    i = 0
-    while i <= len(data): # one extra step: the end of input
-        b = data[i] if i < len(data) else None
-        if state == "START":
-            if b is None: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                else: break
-            elif b in (32, 9): pass # space, tab
-            elif b == 10: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
-            elif is_alpha(b): state, start = "IDENT", i
-            elif is_digit(b): state, start = "NUMBER", i
-            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
-            elif b == ord("+"): tokens.append(Token("add", "+", line, col))
-            elif b == ord("-"): tokens.append(Token("sub", "-", line, col))
-            elif b == ord("*"): tokens.append(Token("mul", "*", line, col))
-            elif b == ord("}"): 
-                tokens.append(Token("rbrace", "}", line, col))
-                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
-                else: blocks -= 1
-            elif b == ord(":"): state, start = "ASSIGN", i
-            else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
-        elif state == "IDENT":
-            if b is not None and (is_alpha(b) or is_digit(b)): pass
-            else:
-                word = data[start:i]
-                tokens.append(Token(KEYWORDS.get(word, "ident"), word.decode(), line, col - len(word)))
-                state = "START"; continue # re-read this byte in START
-        elif state == "NUMBER": 
-            if b is not None and is_digit(b): pass
-            elif b is not None and is_alpha(b): raise CompileError(f"line {line}:{col}: a letter inside a number {data[start:i+1].decode()}")
-            else:
-                number = data[start:i]
-                tokens.append(Token("number", number.decode(), line, col - len(number)))
-                state = "START"; continue # re-read this byte in START
-        elif state == "ASSIGN": 
-            if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
-            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
-        i += 1; col += 1
-    if tokens: lines.append(tokens)
-    return lines
-
-parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
-parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
-parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
-args = parser.parse_args()
-
-I32, I8 = ir.IntType(32), ir.IntType(8)
-
-module = ir.Module(name="practice1")
-module.triple = llvm.get_default_triple()
-main = ir.Function(module, ir.FunctionType(I32, []), name="main")
-builder = ir.IRBuilder(main.append_basic_block("entry"))
-
-printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
-text = b"Program exit with result %d\n\0"
-fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
-fmt.linkage, fmt.global_constant = "private", True
-fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
-
-lines = []
-with open(args.input, "rb") as fp:
-    lines = lex(fp.read())
-
-print(lines)
-
-answer:
-The lexer implementation successfully meets the core requirements for Task 1 outlined in "w02-practice.pdf". It correctly avoids regular expressions and built-in splitting functions in favor of a hand-written state machine that processes the source byte-by-byte.
-
-**Architecture and State Machine**
-
-* **Byte-by-Byte Processing:** The `lex` function iterates through the input bytes one at a time (`while i <= len(data)`), properly handling the end-of-file condition by yielding `None` for the final step to flush the last token.
-
-
-* **State Management:** You implemented an explicit state machine using `START`, `IDENT`, `NUMBER`, and `ASSIGN` states, which aligns perfectly with the requirement to use a loop over bytes with explicit states.
-
-
-* **Re-evaluating Bytes:** When transitioning out of `IDENT` or `NUMBER`, the state machine correctly uses `continue` without advancing `i` and `col`. This satisfies the rule that the scanner may re-examine the byte that ended a token.
-
-
-* **Token Grouping:** By using `tokens` to build lines and appending them to `lines` on encountering a newline (ASCII 10), you successfully constructed a vector of vectors (one inner vector per line) to make the parsing phase easier.
-
-
-
-**Token Structure**
-
-* **Required Fields:** The `Token` class captures all mandated attributes: `kind`, `text`, `line`, and `col`.
-
-
-* **Keywords vs Identifiers:** Keywords (`i32`, `mut`, `exit`) are correctly evaluated only after the entire word is collected in the `IDENT` state, using dictionary lookup (`KEYWORDS.get`).
-
-
-
-**Lexical Error Handling**
-
-* **Line and Column Tracking:** The `line` and `col` variables accurately track position, incrementing correctly and resetting `col` to `0` on newlines so the first character of the next line starts at `1`.
-
-
-* **Unknown Bytes:** Unhandled ASCII characters trigger a `CompileError` formatted as `line X:Y: unexpected byte '...'`, matching the assignment's required error format.
-
-
-* **Unterminated Blocks:** You track open braces with `blocks` and raise an error if a newline or EOF is reached while a `{` remains unclosed on the same line.
-
-
-* **Malformed Numbers:** The lexer specifically checks for letters inside numbers (`is_alpha(b)` inside the `NUMBER` state) and throws an appropriate error.
-
-
-* **Malformed Assignments:** The `ASSIGN` state correctly catches cases where `:` is not immediately followed by `=`, satisfying the operator rules.
-
-
-
-**Minor Technical Feedback**
-Your `is_alpha` and `is_digit` helpers use Python's `chr(b).isalpha()` and `chr(b).isdigit()`. Because you explicitly guard these with `if b > 127: return False`, you safely avoid accidentally matching non-ASCII Unicode characters that Python considers alphabetic, keeping the lexer strictly ASCII-compliant.
-
-**Grade Verdict**
-**2 / 2 points for Task 1.** The code strictly follows the architectural constraints for the lexer (no regex, strict state machine) and implements all necessary structural features and error guardrails required by the assignment.
+{
+    
+}
 
 prompt:
-review additional code, it is for task 2. Is it possible to refactor it and make better? analyze, check and grade it:
-import argparse
-from os import name
-import sys
-from llvmlite import ir
-import llvmlite.binding as llvm
+{
 
-KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
-
-def CompileError(message):
-    print(message, file=sys.stderr)
-    sys.exit(1)
-
-class Token:
-    def __init__(self, kind, text, line, col):
-        self.kind = kind
-        self.text = text
-        self.line = line
-        self.col = col
-
-    def __repr__(self):
-        return f"Token({self.kind}, '{self.text}', {self.line}:{self.col})"
-
-def is_alpha(b):
-    if b > 127: return False
-    return b is not None and (chr(b).isalpha() or chr(b) == '_')
-
-def is_digit(b):
-    if b > 127: return False
-    return b is not None and chr(b).isdigit()
-
-def lex(data: bytes):
-    lines, tokens = [], []
-    state, start, line, col = "START", 0, 1, 1
-    blocks = 0
-    i = 0
-    while i <= len(data): # one extra step: the end of input
-        b = data[i] if i < len(data) else None
-        if state == "START":
-            if b is None: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                else: break
-            elif b in (32, 9): pass # space, tab
-            elif b == 10: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
-            elif is_alpha(b): state, start = "IDENT", i
-            elif is_digit(b): state, start = "NUMBER", i
-            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
-            elif b == ord("+"): tokens.append(Token("operation", "+", line, col))
-            elif b == ord("-"): tokens.append(Token("operation", "-", line, col))
-            elif b == ord("*"): tokens.append(Token("operation", "*", line, col))
-            elif b == ord("}"): 
-                tokens.append(Token("rbrace", "}", line, col))
-                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
-                else: blocks -= 1
-            elif b == ord(":"): state, start = "ASSIGN", i
-            else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
-        elif state == "IDENT":
-            if b is not None and (is_alpha(b) or is_digit(b)): pass
-            else:
-                word = data[start:i]
-                tokens.append(Token(KEYWORDS.get(word, "ident"), word.decode(), line, col - len(word)))
-                state = "START"; continue # re-read this byte in START
-        elif state == "NUMBER": 
-            if b is not None and is_digit(b): pass
-            elif b is not None and is_alpha(b): raise CompileError(f"line {line}:{col}: a letter inside a number {data[start:i+1].decode()}")
-            else:
-                number = data[start:i]
-                tokens.append(Token("number", number.decode(), line, col - len(number)))
-                state = "START"; continue # re-read this byte in START
-        elif state == "ASSIGN": 
-            if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
-            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
-        i += 1; col += 1
-    if tokens: lines.append(tokens)
-    return lines
-
-def declarateVar(builder, line: list[Token]):
-    i = 1
-    token = line[i]
-
-    isMut = False
-    if line[i].kind == "keyword" and line[i].text == "mut": isMut = True; next(i)
-
-    if line[i].kind != "identifier": 
-        raise CompileError(f"line {line[i].line}:{line[i].col}: invalid variable name {line[i].text}")
-    else: 
-        name = line[i].text
-        if name in mut or name in const:
-            raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' is already defined")
-        next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
-
-    if line[i].kind != "lbrace":
-        raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
-
-    next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
-
-    value = None
-    value_1 = None
-    value_2 = None
-    opr = None
-
-    # single value or value 1
-    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
-    elif token.kind == "identifier":
-        if token.text in mut: value_1 = builder.load(mut[token.text])
-        elif token.text in const: value_1 = builder.load(const[token.text])
-        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.kind == "operation" and token.text == "-":
-        value_1 = ir.Constant(I32, 0)
-        next(i - 2)
-    else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-    next(i)
-    if token.kind != "rbrace":
-        if token.kind == "operation": opr = token.text
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-        next(i, mssg=f"invalid initialiser for variable '{name}'")
-
-        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
-        elif token.kind == "identifier":
-            if token.text in mut: value_2 = builder.load(mut[token.text])
-            elif token.text in const: value_2 = builder.load(const[token.text])
-            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-        next(i, mssg=f"invalid initialiser for variable '{name}'")
-        if token.kind != "rbrace": raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-        if opr == "+": value = builder.add(value_1, value_2)
-        elif opr == "-": value = builder.sub(value_1, value_2)  
-        elif opr == "*": value = builder.mul(value_1, value_2)
-
-    else: value = value_1
-
-    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-    if isMut: mut[name] = builder.alloca(I32, name=name); builder.store(value, mut[name])
-    else: const[name] = builder.alloca(I32, name=name); builder.store(value, const[name])
-
-    def next(value: int, mssg: str = "unexpected end of line"):
-        if value + 1 >= len(line): 
-            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
-
-        i = value + 1
-        token = line[i]
-
-
-def exitProgram(builder, line: list[Token]):
-    token = line[1]
-
-    value = None
-    value_1 = None
-    value_2 = None
-    opr = None
-
-    # single value or value 1
-    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
-    elif token.kind == "identifier":
-        if token.text in mut: value_1 = builder.load(mut[token.text])
-        elif token.text in const: value_1 = builder.load(const[token.text])
-        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.kind == "operation" and token.text == "-":
-        builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), ir.Constant(I32, -int(token.text))])
-        builder.ret(ir.Constant(I32, 0))
-        return
-    else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
-
-    if 2 < len(line):
-        token = line[2]
-
-        if token.kind == "operation": opr = token.text
-        else: raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-        token = line[3]
-
-        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
-        elif token.kind == "identifier":
-            if token.text in mut: value_2 = builder.load(mut[token.text])
-            elif token.text in const: value_2 = builder.load(const[token.text])
-            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
-
-        if opr == "+": value = builder.add(value_1, value_2)
-        elif opr == "-": value = builder.sub(value_1, value_2)  
-        elif opr == "*": value = builder.mul(value_1, value_2)
-
-        if 4 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-    else: 
-        value = value_1
-
-    builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), value])
-    builder.ret(ir.Constant(I32, 0))
-    return
-
-
-def defineVar(builder, line: list[Token]):
-    i = 1
-    token = line[i]
-
-    if token.kind != "identifier":
-        raise CompileError(f"line {token.line}:{token.col}: invalid variable name {token.text}")
-    elif token.text not in const and token.text not in mut:
-        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.text not in mut:
-        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not mutable")
-    else: name = token.text
-
-    next(i, mssg=f"wrong operation")
-    if token.kind != "assign": raise CompileError(f"line {token.line}:{token.col}: wrong operation")
-
-    next(i, mssg=f"nothing to assign")
-
-    value = None
-    value_1 = None
-    value_2 = None
-    opr = None
-
-    # single value or value 1
-    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
-    elif token.kind == "identifier":
-        if token.text in mut: value_1 = builder.load(mut[token.text])
-        elif token.text in const: value_1 = builder.load(const[token.text])
-        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.kind == "operation" and token.text == "-":
-        value_1 = ir.Constant(I32, 0)
-        next(i - 2)
-    else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
-
-    if i + 1 < len(line):
-        next(i)
-        if token.kind == "operation": opr = token.text
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
-
-        next(i, mssg=f"invalid expression")
-
-        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
-        elif token.kind == "identifier":
-            if token.text in mut: value_2 = builder.load(mut[token.text])
-            elif token.text in const: value_2 = builder.load(const[token.text])
-            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
-
-        if opr == "+": value = builder.add(value_1, value_2)
-        elif opr == "-": value = builder.sub(value_1, value_2)  
-        elif opr == "*": value = builder.mul(value_1, value_2)
-
-    else: value = value_1
-    
-    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-    builder.store(value, mut[name])
-
-    def next(value: int, mssg: str = "unexpected end of line"):
-        if value + 1 >= len(line): 
-            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
-
-        i = value + 1
-        token = line[i]
-
-
-parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
-parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
-parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
-args = parser.parse_args()
-
-I32, I8 = ir.IntType(32), ir.IntType(8)
-
-module = ir.Module(name="practice1")
-module.triple = llvm.get_default_triple()
-main = ir.Function(module, ir.FunctionType(I32, []), name="main")
-builder = ir.IRBuilder(main.append_basic_block("entry"))
-
-printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
-text = b"Program exit with result %d\n\0"
-fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
-fmt.linkage, fmt.global_constant = "private", True
-fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
-
-lines = []
-with open(args.input, "rb") as fp:
-    lines = lex(fp.read())
-
-const, mut = {}, {}
-exitCalls = 0
-for line in lines:
-    if not line: continue
-
-    firstToken = line[0]
-    if firstToken.text == "i32": declarateVar(builder, line)
-    elif firstToken.text == "exit": exitProgram(builder, line); exitCalls += 1
-    elif firstToken.kind == "identifier": defineVar(builder, line)
-    else: raise CompileError(f"line {firstToken.line}:{firstToken.col}: invalid statement")
-
-if exitCalls == 0: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program needs an exit statement")
-elif exitCalls > 1: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program can only have one exit statement")
-
-with open(args.output, "w") as f:
-    f.write(str(module))
+}
 
 answer:
-review additional code, it is for task 2. Is it possible to refactor it and make better? analyze, check and grade it:
-import argparse
-from os import name
-import sys
-from llvmlite import ir
-import llvmlite.binding as llvm
-
-KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
-
-def CompileError(message):
-    print(message, file=sys.stderr)
-    sys.exit(1)
-
-class Token:
-    def __init__(self, kind, text, line, col):
-        self.kind = kind
-        self.text = text
-        self.line = line
-        self.col = col
-
-    def __repr__(self):
-        return f"Token({self.kind}, '{self.text}', {self.line}:{self.col})"
-
-def is_alpha(b):
-    if b > 127: return False
-    return b is not None and (chr(b).isalpha() or chr(b) == '_')
-
-def is_digit(b):
-    if b > 127: return False
-    return b is not None and chr(b).isdigit()
-
-def lex(data: bytes):
-    lines, tokens = [], []
-    state, start, line, col = "START", 0, 1, 1
-    blocks = 0
-    i = 0
-    while i <= len(data): # one extra step: the end of input
-        b = data[i] if i < len(data) else None
-        if state == "START":
-            if b is None: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                else: break
-            elif b in (32, 9): pass # space, tab
-            elif b == 10: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
-            elif is_alpha(b): state, start = "IDENT", i
-            elif is_digit(b): state, start = "NUMBER", i
-            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
-            elif b == ord("+"): tokens.append(Token("operation", "+", line, col))
-            elif b == ord("-"): tokens.append(Token("operation", "-", line, col))
-            elif b == ord("*"): tokens.append(Token("operation", "*", line, col))
-            elif b == ord("}"): 
-                tokens.append(Token("rbrace", "}", line, col))
-                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
-                else: blocks -= 1
-            elif b == ord(":"): state, start = "ASSIGN", i
-            else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
-        elif state == "IDENT":
-            if b is not None and (is_alpha(b) or is_digit(b)): pass
-            else:
-                word = data[start:i]
-                tokens.append(Token(KEYWORDS.get(word, "ident"), word.decode(), line, col - len(word)))
-                state = "START"; continue # re-read this byte in START
-        elif state == "NUMBER": 
-            if b is not None and is_digit(b): pass
-            elif b is not None and is_alpha(b): raise CompileError(f"line {line}:{col}: a letter inside a number {data[start:i+1].decode()}")
-            else:
-                number = data[start:i]
-                tokens.append(Token("number", number.decode(), line, col - len(number)))
-                state = "START"; continue # re-read this byte in START
-        elif state == "ASSIGN": 
-            if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
-            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
-        i += 1; col += 1
-    if tokens: lines.append(tokens)
-    return lines
-
-def declarateVar(builder, line: list[Token]):
-    i = 1
-    token = line[i]
-
-    isMut = False
-    if line[i].kind == "keyword" and line[i].text == "mut": isMut = True; next(i)
-
-    if line[i].kind != "identifier": 
-        raise CompileError(f"line {line[i].line}:{line[i].col}: invalid variable name {line[i].text}")
-    else: 
-        name = line[i].text
-        if name in mut or name in const:
-            raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' is already defined")
-        next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
-
-    if line[i].kind != "lbrace":
-        raise CompileError(f"line {line[i].line}:{line[i].col}: variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
-
-    next(i, mssg=f"variable '{name}' needs an initialiser in {repr('{')}{repr('}')}")
-
-    value = None
-    value_1 = None
-    value_2 = None
-    opr = None
-
-    # single value or value 1
-    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
-    elif token.kind == "identifier":
-        if token.text in mut: value_1 = builder.load(mut[token.text])
-        elif token.text in const: value_1 = builder.load(const[token.text])
-        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.kind == "operation" and token.text == "-":
-        value_1 = ir.Constant(I32, 0)
-        next(i - 2)
-    else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-    next(i)
-    if token.kind != "rbrace":
-        if token.kind == "operation": opr = token.text
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-        next(i, mssg=f"invalid initialiser for variable '{name}'")
-
-        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
-        elif token.kind == "identifier":
-            if token.text in mut: value_2 = builder.load(mut[token.text])
-            elif token.text in const: value_2 = builder.load(const[token.text])
-            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-        next(i, mssg=f"invalid initialiser for variable '{name}'")
-        if token.kind != "rbrace": raise CompileError(f"line {token.line}:{token.col}: invalid initialiser for variable '{name}'")
-
-        if opr == "+": value = builder.add(value_1, value_2)
-        elif opr == "-": value = builder.sub(value_1, value_2)  
-        elif opr == "*": value = builder.mul(value_1, value_2)
-
-    else: value = value_1
-
-    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-    if isMut: mut[name] = builder.alloca(I32, name=name); builder.store(value, mut[name])
-    else: const[name] = builder.alloca(I32, name=name); builder.store(value, const[name])
-
-    def next(value: int, mssg: str = "unexpected end of line"):
-        if value + 1 >= len(line): 
-            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
-
-        i = value + 1
-        token = line[i]
-
-
-def exitProgram(builder, line: list[Token]):
-    token = line[1]
-
-    value = None
-    value_1 = None
-    value_2 = None
-    opr = None
-
-    # single value or value 1
-    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
-    elif token.kind == "identifier":
-        if token.text in mut: value_1 = builder.load(mut[token.text])
-        elif token.text in const: value_1 = builder.load(const[token.text])
-        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.kind == "operation" and token.text == "-":
-        builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), ir.Constant(I32, -int(token.text))])
-        builder.ret(ir.Constant(I32, 0))
-        return
-    else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
-
-    if 2 < len(line):
-        token = line[2]
-
-        if token.kind == "operation": opr = token.text
-        else: raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-        token = line[3]
-
-        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
-        elif token.kind == "identifier":
-            if token.text in mut: value_2 = builder.load(mut[token.text])
-            elif token.text in const: value_2 = builder.load(const[token.text])
-            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid exit value")
-
-        if opr == "+": value = builder.add(value_1, value_2)
-        elif opr == "-": value = builder.sub(value_1, value_2)  
-        elif opr == "*": value = builder.mul(value_1, value_2)
-
-        if 4 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-    else: 
-        value = value_1
-
-    builder.call(printf, [builder.bitcast(fmt, ir.PointerType(I8)), value])
-    builder.ret(ir.Constant(I32, 0))
-    return
-
-
-def defineVar(builder, line: list[Token]):
-    i = 1
-    token = line[i]
-
-    if token.kind != "identifier":
-        raise CompileError(f"line {token.line}:{token.col}: invalid variable name {token.text}")
-    elif token.text not in const and token.text not in mut:
-        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.text not in mut:
-        raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not mutable")
-    else: name = token.text
-
-    next(i, mssg=f"wrong operation")
-    if token.kind != "assign": raise CompileError(f"line {token.line}:{token.col}: wrong operation")
-
-    next(i, mssg=f"nothing to assign")
-
-    value = None
-    value_1 = None
-    value_2 = None
-    opr = None
-
-    # single value or value 1
-    if token.kind == "number": value_1 = ir.Constant(I32, int(token.text))
-    elif token.kind == "identifier":
-        if token.text in mut: value_1 = builder.load(mut[token.text])
-        elif token.text in const: value_1 = builder.load(const[token.text])
-        else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-    elif token.kind == "operation" and token.text == "-":
-        value_1 = ir.Constant(I32, 0)
-        next(i - 2)
-    else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
-
-    if i + 1 < len(line):
-        next(i)
-        if token.kind == "operation": opr = token.text
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
-
-        next(i, mssg=f"invalid expression")
-
-        if token.kind == "number": value_2 = ir.Constant(I32, int(token.text))
-        elif token.kind == "identifier":
-            if token.text in mut: value_2 = builder.load(mut[token.text])
-            elif token.text in const: value_2 = builder.load(const[token.text])
-            else: raise CompileError(f"line {token.line}:{token.col}: variable '{token.text}' is not defined")
-        else: raise CompileError(f"line {token.line}:{token.col}: invalid expression")
-
-        if opr == "+": value = builder.add(value_1, value_2)
-        elif opr == "-": value = builder.sub(value_1, value_2)  
-        elif opr == "*": value = builder.mul(value_1, value_2)
-
-    else: value = value_1
+{
     
-    if i + 1 < len(line): raise CompileError(f"line {token.line}:{token.col}: extra tokens on a line")
-
-    builder.store(value, mut[name])
-
-    def next(value: int, mssg: str = "unexpected end of line"):
-        if value + 1 >= len(line): 
-            raise CompileError(f"line {token.line}:{token.col}: {mssg}")
-
-        i = value + 1
-        token = line[i]
-
-
-parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
-parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
-parser.add_argument("output", help="Path to the output LLVM IR file (e.g., output.ll)")
-args = parser.parse_args()
-
-I32, I8 = ir.IntType(32), ir.IntType(8)
-
-module = ir.Module(name="practice1")
-module.triple = llvm.get_default_triple()
-main = ir.Function(module, ir.FunctionType(I32, []), name="main")
-builder = ir.IRBuilder(main.append_basic_block("entry"))
-
-printf = ir.Function(module, ir.FunctionType(I32, [ir.PointerType(I8)], var_arg=True), name="printf")
-text = b"Program exit with result %d\n\0"
-fmt = ir.GlobalVariable(module, ir.ArrayType(I8, len(text)), name="fmt")
-fmt.linkage, fmt.global_constant = "private", True
-fmt.initializer = ir.Constant(ir.ArrayType(I8, len(text)), bytearray(text))
-
-lines = []
-with open(args.input, "rb") as fp:
-    lines = lex(fp.read())
-
-const, mut = {}, {}
-exitCalls = 0
-for line in lines:
-    if not line: continue
-
-    firstToken = line[0]
-    if firstToken.text == "i32": declarateVar(builder, line)
-    elif firstToken.text == "exit": exitProgram(builder, line); exitCalls += 1
-    elif firstToken.kind == "identifier": defineVar(builder, line)
-    else: raise CompileError(f"line {firstToken.line}:{firstToken.col}: invalid statement")
-
-if exitCalls == 0: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program needs an exit statement")
-elif exitCalls > 1: raise CompileError(f"line {firstToken.line}:{firstToken.col}: program can only have one exit statement")
-
-with open(args.output, "w") as f:
-    f.write(str(module))
+}
