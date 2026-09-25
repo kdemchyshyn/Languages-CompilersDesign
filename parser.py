@@ -18,7 +18,8 @@ class Parser:
         else:
             line = self.current_line_num
             col = self.last_col
-        CompileError(f"line {line}:{col}: {message}")
+
+        raise CompileError(f"line {line}:{col}: {message}")
 
     def peek(self):
         return self.toks[self.pos] if self.pos < len(self.toks) else None
@@ -30,7 +31,7 @@ class Parser:
     
     def expect(self, kind, what):
         tok = self.peek()
-        if tok is None or tok.kind != kind: raise self.error(f"expected {what}")
+        if tok is None or tok.kind != kind: self.error(f"expected {what}")
         return self.eat()
     
     def parse_program(self):
@@ -39,7 +40,7 @@ class Parser:
 
         for toks in self.lines:
             if not toks: 
-                continue # Skip pure blank lines
+                continue
 
             self.toks, self.pos = toks, 0
             self.current_line_num = toks[0].line
@@ -59,7 +60,7 @@ class Parser:
                 self.error(f"unexpected '{self.peek().text}' after the statement")
 
         if exit_node is None:
-            CompileError(f"line {self.current_line_num}:{self.last_col}: program without exit")
+            raise CompileError(f"line {self.current_line_num}:{self.last_col}: program without exit")
 
         start_line = stmts[0].line if stmts else exit_node.line
         start_col = stmts[0].col if stmts else exit_node.col

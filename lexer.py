@@ -34,7 +34,8 @@ def lex(data: bytes):
             elif b in (32, 9): pass # space, tab
             elif b == 10: 
                 if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                elif tokens: lines.append(tokens); tokens = []; line += 1; col = 0
+                if tokens: lines.append(tokens); tokens = []
+                line += 1; col = 0
             elif is_alpha(b): state, start = "IDENT", i
             elif is_digit(b): state, start = "NUMBER", i
             elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
