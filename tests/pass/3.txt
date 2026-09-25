@@ -1,5 +1,0 @@
-i32 x {8}
-i32 y{8}
-i32 mut z{0}
-z := x+y
-exit z

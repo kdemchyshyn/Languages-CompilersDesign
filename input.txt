@@ -1,6 +1,5 @@
-i32 x{0}
-i32 mut y{10}
-i32 z{2+5}
-i32 mut t { x + 10 }
-t := t * z
-exit t
+i32 x{2 + 3 * 4}
+i32 mut a{10 - 3 - 2}
+a := a * 2 - 1
+i32 z{x * a - 6}
+exit z

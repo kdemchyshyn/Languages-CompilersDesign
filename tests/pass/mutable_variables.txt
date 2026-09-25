@@ -1,5 +1,5 @@
 i32 mut _var {0}
-i32 non {-5}
+i32 non {0-5}
 
 _var:= 10* non
 exit _var

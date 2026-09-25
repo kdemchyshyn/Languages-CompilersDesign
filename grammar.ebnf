@@ -1,0 +1,9 @@
+operand    ::= number | ident
+factor     ::= operand
+term       ::= factor { "*" factor }
+expr       ::= term { ("+" | "-") term }
+decl       ::= "i32" [ "mut" ] ident "{" expr "}"
+assign     ::= ident ":=" expr
+statement  ::= decl | assign
+exitStmt   ::= "exit" factor
+program    ::= { statement } exitStmt
