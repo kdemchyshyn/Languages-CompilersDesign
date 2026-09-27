@@ -1,9 +1,13 @@
-operand    ::= number | ident
-factor     ::= operand
+factor     ::= number | ident | "true" | "false"
+type       ::= "i32" | "i64" | "bool"
+
 term       ::= factor { "*" factor }
-expr       ::= term { ("+" | "-") term }
-decl       ::= "i32" [ "mut" ] ident "{" expr "}"
+arith      ::= term { ("+" | "-") term }
+expr       ::= arith [ ("==" | "!=") arith ] 
+
+decl       ::= type [ "mut" ] ident "{" expr "}"
 assign     ::= ident ":=" expr
+exit       ::= "exit" factor
+
 statement  ::= decl | assign
-exitStmt   ::= "exit" factor
-program    ::= { statement } exitStmt
+program    ::= { statement } exit
