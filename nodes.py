@@ -47,6 +47,7 @@ class AssignNode(StmtNode):
         super().__init__(line, col)
         self.name = name
         self.value = value
+        self.decl = None
 
     def dump(self, indent=0):
         print("  " * indent + f"Assign {self.name}")
@@ -67,7 +68,10 @@ class ExitNode(Node):
     def accept(self, visitor):
         return visitor.visit_exit(self)
 
-class ExprNode(Node): pass
+class ExprNode(Node):
+    def __init__(self, line, col):
+        super().__init__(line, col)
+        self.type = None
 
 class BinOpNode(ExprNode):
     def __init__(self, line, col, op, left, right):
@@ -88,6 +92,7 @@ class VarNode(ExprNode):
     def __init__(self, line, col, name):
         super().__init__(line, col)
         self.name = name
+        self.decl = None
 
     def dump(self, indent=0):
         print("  " * indent + f"Var {self.name}")

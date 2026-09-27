@@ -65,10 +65,10 @@ def lex(data: bytes):
                 state = "START"; continue # re-read this byte in START
         elif state == "ASSIGN": 
             if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
-            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
+            else: raise CompileError(f"line {line}:{col - 1}: a {repr(":")} not followed by {repr("=")}")
         elif state == "COMPARE":
             if b == ord("="): tokens.append(Token("operation", data[start:i+1].decode(), line, col - 1)); state = "START"
-            else: raise CompileError(f"line {line}:{col}: a {repr(data[start:i].decode())} not followed by {repr("=")}")
+            else: raise CompileError(f"line {line}:{col - 1}: a {repr(data[start:i].decode())} not followed by {repr("=")}")
         i += 1; col += 1
     if tokens: lines.append(tokens)
     return lines

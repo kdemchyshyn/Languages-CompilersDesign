@@ -139,7 +139,7 @@ class Parser:
     def parse_factor(self):
         tok = self.peek()
         if tok is None:
-            self.error("expected a value or a variable, found end of line")
+            self.error("expected a constant or a variable, found end of line")
             
         if tok.kind == "number":
             self.eat()
