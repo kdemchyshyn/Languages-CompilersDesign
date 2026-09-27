@@ -1,0 +1,4 @@
+i32 x{46341}
+i64 y {46341}
+i64 res {y * x + x}
+exit res

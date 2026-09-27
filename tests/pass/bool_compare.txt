@@ -1,0 +1,6 @@
+bool a{true}
+bool b{false}
+bool same{a == b}
+bool diff{a != b}
+bool res {diff != same}
+exit res

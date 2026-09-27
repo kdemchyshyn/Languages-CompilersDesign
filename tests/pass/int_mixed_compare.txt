@@ -1,0 +1,4 @@
+i32 narrow{42}
+i64 wide{42}
+bool eq{narrow == wide}
+exit eq
