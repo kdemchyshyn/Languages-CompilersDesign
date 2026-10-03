@@ -24,6 +24,7 @@ class ProgramNode(Node):
     def accept(self, visitor):
         return visitor.visit_program(self)
 
+
 class StmtNode(Node): pass
 
 class DeclNode(StmtNode):
@@ -68,6 +69,23 @@ class ExitNode(Node):
     def accept(self, visitor):
         return visitor.visit_exit(self)
 
+class IfNode(StmtNode):
+    def __init__(self, line, col, condition, then_block, else_block):
+        super().__init__(line, col)
+        self.condition = condition
+        self.then_block = then_block
+        self.else_block = else_block
+
+    def dump(self, indent=0):
+        print("  " * indent + "If")
+        self.condition.dump(indent + 1)
+        self.then_block.dump(indent + 1)
+        if self.else_block:
+            self.else_block.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_if(self)
+
 class ExprNode(Node):
     def __init__(self, line, col):
         super().__init__(line, col)
@@ -87,6 +105,18 @@ class BinOpNode(ExprNode):
 
     def accept(self, visitor):
         return visitor.visit_binop(self)
+
+class NotNode(ExprNode):
+    def __init__(self, line, col, value):
+        super().__init__(line, col)
+        self.value = value
+
+    def dump(self, indent=0):
+        print("  " * indent + "Not")
+        self.value.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_not(self)
 
 class VarNode(ExprNode):
     def __init__(self, line, col, name):
@@ -122,3 +152,19 @@ class BoolNode(ExprNode):
 
     def accept(self, visitor):
         return visitor.visit_bool(self)
+
+class BlockNode(Node):
+    def __init__(self, line, col, statements, exit_node):
+        super().__init__(line, col)
+        self.statements = statements
+        self.exit = exit_node
+
+    def dump(self, indent=0):
+        print("  " * indent + "Block")
+        for stmt in self.statements:
+            stmt.dump(indent + 1)
+        if self.exit:
+            self.exit.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_block(self)

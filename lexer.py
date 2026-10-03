@@ -1,6 +1,10 @@
 from errors import CompileError
 
-KEYWORDS = {b"i32": "keyword", b"i64": "keyword", b"bool": "keyword", b"mut": "keyword", b"exit": "keyword", b"true": "keyword", b"false": "keyword"}
+KEYWORDS = {b"i32": "keyword", b"i64": "keyword", b"bool": "keyword", 
+            b"mut": "keyword", 
+            b"exit": "keyword", 
+            b"true": "keyword", b"false": "keyword",
+            b"if": "keyword", b"else": "keyword"}
 
 class Token:
     def __init__(self, kind, text, line, col):
@@ -23,32 +27,26 @@ def is_digit(b):
 def lex(data: bytes):
     lines, tokens = [], []
     state, start, line, col = "START", 0, 1, 1
-    blocks = 0
     i = 0
     while i <= len(data): # one extra step: the end of input
         b = data[i] if i < len(data) else None
         if state == "START":
             if b is None: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
-                else: break
+                break
             elif b in (32, 9, 13): pass # space, tab, \r
             elif b == 10: 
-                if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
                 if tokens: lines.append(tokens); tokens = []
                 line += 1; col = 0
             elif is_alpha(b): state, start = "IDENT", i
             elif is_digit(b): state, start = "NUMBER", i
-            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col)); blocks += 1
+            elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col))
             elif b == ord("+"): tokens.append(Token("operation", "+", line, col))
             elif b == ord("-"): tokens.append(Token("operation", "-", line, col))
             elif b == ord("*"): tokens.append(Token("operation", "*", line, col))
-            elif b == ord("}"): 
-                tokens.append(Token("rbrace", "}", line, col))
-                if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
-                else: blocks -= 1
+            elif b == ord("}"): tokens.append(Token("rbrace", "}", line, col))
             elif b == ord(":"): state, start = "ASSIGN", i
-            elif b == ord("="): state, start = "COMPARE", i
-            elif b == ord("!"): state, start = "COMPARE", i
+            elif b == ord("="): state, start = "EQUAL", i
+            elif b == ord("!"): state, start = "NOT", i
             else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
         elif state == "IDENT":
             if b is not None and (is_alpha(b) or is_digit(b)): pass
@@ -66,9 +64,16 @@ def lex(data: bytes):
         elif state == "ASSIGN": 
             if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
             else: raise CompileError(f"line {line}:{col - 1}: a {repr(":")} not followed by {repr("=")}")
-        elif state == "COMPARE":
+        elif state == "EQUAL":
             if b == ord("="): tokens.append(Token("operation", data[start:i+1].decode(), line, col - 1)); state = "START"
             else: raise CompileError(f"line {line}:{col - 1}: a {repr(data[start:i].decode())} not followed by {repr("=")}")
+        elif state == "NOT":
+            if b == ord("="): 
+                tokens.append(Token("operation", data[start:i+1].decode(), line, col - 1))
+                state = "START"
+            else: 
+                tokens.append(Token("operation", "!", line, col - 1))
+                state = "START"; continue # re-read this byte in START
         i += 1; col += 1
     if tokens: lines.append(tokens)
     return lines
