@@ -1,0 +1,6 @@
+i32 a{10}
+i64 b{20}
+i64 f{a}
+i64 mut c{a + b}
+c := c + f
+exit c

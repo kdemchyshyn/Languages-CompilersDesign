@@ -1,6 +1,6 @@
 from errors import CompileError
 
-KEYWORDS = {b"i32": "keyword", b"mut": "keyword", b"exit": "keyword"}
+KEYWORDS = {b"i32": "keyword", b"i64": "keyword", b"bool": "keyword", b"mut": "keyword", b"exit": "keyword", b"true": "keyword", b"false": "keyword"}
 
 class Token:
     def __init__(self, kind, text, line, col):
@@ -31,7 +31,7 @@ def lex(data: bytes):
             if b is None: 
                 if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
                 else: break
-            elif b in (32, 9): pass # space, tab
+            elif b in (32, 9, 13): pass # space, tab, \r
             elif b == 10: 
                 if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
                 if tokens: lines.append(tokens); tokens = []
@@ -47,6 +47,8 @@ def lex(data: bytes):
                 if blocks == 0: raise CompileError(f"line {line}:{col}: {repr("}")} is not opened in the line") 
                 else: blocks -= 1
             elif b == ord(":"): state, start = "ASSIGN", i
+            elif b == ord("="): state, start = "COMPARE", i
+            elif b == ord("!"): state, start = "COMPARE", i
             else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
         elif state == "IDENT":
             if b is not None and (is_alpha(b) or is_digit(b)): pass
@@ -63,7 +65,10 @@ def lex(data: bytes):
                 state = "START"; continue # re-read this byte in START
         elif state == "ASSIGN": 
             if b == ord("="): tokens.append(Token("assign", ":=", line, col - 1)); state = "START"
-            else: raise CompileError(f"line {line}:{col}: a {repr(":")} not followed by {repr("=")}")
+            else: raise CompileError(f"line {line}:{col - 1}: a {repr(":")} not followed by {repr("=")}")
+        elif state == "COMPARE":
+            if b == ord("="): tokens.append(Token("operation", data[start:i+1].decode(), line, col - 1)); state = "START"
+            else: raise CompileError(f"line {line}:{col - 1}: a {repr(data[start:i].decode())} not followed by {repr("=")}")
         i += 1; col += 1
     if tokens: lines.append(tokens)
     return lines

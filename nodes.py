@@ -27,15 +27,16 @@ class ProgramNode(Node):
 class StmtNode(Node): pass
 
 class DeclNode(StmtNode):
-    def __init__(self, line, col, name, mutable, init):
+    def __init__(self, line, col, name, type_name, mutable, init):
         super().__init__(line, col)
         self.name = name
+        self.type_name = type_name
         self.mutable = mutable
         self.init = init
 
     def dump(self, indent=0):
         mut_str = "mut" if self.mutable else "const"
-        print("  " * indent + f"Decl {self.name} {mut_str}")
+        print("  " * indent + f"Decl {self.name} {self.type_name} {mut_str}")
         self.init.dump(indent + 1)
 
     def accept(self, visitor):
@@ -46,6 +47,7 @@ class AssignNode(StmtNode):
         super().__init__(line, col)
         self.name = name
         self.value = value
+        self.decl = None
 
     def dump(self, indent=0):
         print("  " * indent + f"Assign {self.name}")
@@ -66,7 +68,10 @@ class ExitNode(Node):
     def accept(self, visitor):
         return visitor.visit_exit(self)
 
-class ExprNode(Node): pass
+class ExprNode(Node):
+    def __init__(self, line, col):
+        super().__init__(line, col)
+        self.type = None
 
 class BinOpNode(ExprNode):
     def __init__(self, line, col, op, left, right):
@@ -87,6 +92,7 @@ class VarNode(ExprNode):
     def __init__(self, line, col, name):
         super().__init__(line, col)
         self.name = name
+        self.decl = None
 
     def dump(self, indent=0):
         print("  " * indent + f"Var {self.name}")
@@ -104,3 +110,15 @@ class ConstNode(ExprNode):
 
     def accept(self, visitor):
         return visitor.visit_const(self)
+
+class BoolNode(ExprNode):
+    def __init__(self, line, col, value):
+        super().__init__(line, col)
+        self.value = value
+
+    def dump(self, indent=0):
+        val_str = "true" if self.value else "false"
+        print("  " * indent + f"Bool {val_str}")
+
+    def accept(self, visitor):
+        return visitor.visit_bool(self)

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 COMPILER="python3 compiler.py"
-PASS_DIR="tests/pass"
-FAIL_DIR="tests/fail"
+PASS_DIR="tests/ok"
+FAIL_DIR="tests/err"
 OUTPUT_LL="test_output.ll"
 
 passed=0

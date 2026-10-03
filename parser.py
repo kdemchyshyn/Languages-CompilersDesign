@@ -1,5 +1,5 @@
 from errors import CompileError
-from nodes import ProgramNode, DeclNode, AssignNode, ExitNode, BinOpNode, VarNode, ConstNode
+from nodes import ProgramNode, DeclNode, AssignNode, ExitNode, BinOpNode, VarNode, ConstNode, BoolNode
 
 class Parser:
     def __init__(self, lines):
@@ -9,6 +9,7 @@ class Parser:
         self.pos = 0
         self.current_line_num = 1
         self.last_col = 1
+        self.TYPES = ["i32", "i64", "bool"] # Map from type name to type representation
 
     def error(self, message):
         """Raises a CompileError with the line and column of the error."""
@@ -71,7 +72,7 @@ class Parser:
         if tok is None:
             self.error("expected a statement, found end of line")
         
-        if tok.kind == "keyword" and tok.text == "i32":
+        if tok.kind == "keyword" and tok.text in self.TYPES:
             return self.parse_decl()
         elif tok.kind == "ident":
             return self.parse_assign()
@@ -79,7 +80,7 @@ class Parser:
             self.error(f"cannot start a statement with '{tok.text}'")
 
     def parse_decl(self):
-        tok = self.eat() # Eat "i32"
+        type = self.eat() # Eat a type keyword
         mutable = False
         
         if self.peek() is not None and self.peek().kind == "keyword" and self.peek().text == "mut":
@@ -95,7 +96,7 @@ class Parser:
         init = self.parse_expr()
         self.expect("rbrace", "'}'")
         
-        return DeclNode(name.line, name.col, name.text, mutable, init)
+        return DeclNode(name.line, name.col, name.text, type.text, mutable, init)
 
     def parse_assign(self):
         name = self.eat() # We know it's ident from parse_statement
@@ -115,6 +116,13 @@ class Parser:
         return ExitNode(tok.line, tok.col, value)
 
     def parse_expr(self):
+        node = self.parse_arith()
+        if (tok := self.peek()) is not None and tok.kind == "operation" and tok.text in ("==", "!="):
+            self.eat()
+            node = BinOpNode(tok.line, tok.col, tok.text, node, self.parse_arith())
+        return node
+
+    def parse_arith(self):
         node = self.parse_term()
         while (tok := self.peek()) is not None and tok.kind == "operation" and tok.text in ("+", "-"):
             self.eat()
@@ -136,6 +144,9 @@ class Parser:
         if tok.kind == "number":
             self.eat()
             return ConstNode(tok.line, tok.col, int(tok.text))
+        elif tok.kind == "keyword" and tok.text in ("true", "false"):
+            self.eat()
+            return BoolNode(tok.line, tok.col, True if tok.text == "true" else False)
         elif tok.kind == "ident":
             self.eat()
             return VarNode(tok.line, tok.col, tok.text)

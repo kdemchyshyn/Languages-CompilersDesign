@@ -1,0 +1,4 @@
+i64 big{3000000000}
+i64 target{2999999999 + 1}
+i64 res{big - target}
+exit res
