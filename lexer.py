@@ -31,7 +31,7 @@ def lex(data: bytes):
             if b is None: 
                 if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
                 else: break
-            elif b in (32, 9): pass # space, tab
+            elif b in (32, 9, 13): pass # space, tab, \r
             elif b == 10: 
                 if blocks > 0: raise CompileError(f"line {line}:{col}: {repr("{")} is not closed before the end of the line")
                 if tokens: lines.append(tokens); tokens = []
