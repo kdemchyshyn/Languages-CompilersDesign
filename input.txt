@@ -1,11 +1,7 @@
-i32 mut a{10}
-bool b{true}
-if b
+i32 mut a{0}
+i32 target {3}
+while a != target
 {
-    a := a + 5
+    a := a + 1
 }
-else
-{
-    a := a - 5
-}
-exit a  
+exit a 

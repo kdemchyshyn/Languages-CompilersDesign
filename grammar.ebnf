@@ -11,6 +11,7 @@ decl       ::= type [ "mut" ] ident "{" expr "}"
 assign     ::= ident ":=" expr
 exit       ::= "exit" factor
 if         ::= "if" expr NL block [ "else" NL block ]
+while      ::= "while" expr NL block
 
-statement  ::= decl | assign | if
+statement  ::= decl | assign | if | while
 program    ::= { statement } exit

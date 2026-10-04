@@ -152,3 +152,21 @@ class CodeGen:
     def visit_not(self, node):
         val = node.value.accept(self)
         return self.builder.not_(val, name="nottmp")
+
+    def visit_while(self, node):
+        cond_bb = self.function.append_basic_block("while.cond")
+        body_bb = self.function.append_basic_block("while.body")
+        end_bb = self.function.append_basic_block("while.end")
+
+        self.builder.branch(cond_bb)
+        self.builder.position_at_end(cond_bb)
+        cond_val = node.condition.accept(self)        
+        self.builder.cbranch(cond_val, body_bb, end_bb)
+
+        self.builder.position_at_end(body_bb)
+        node.body.accept(self)
+
+        if not self.builder.block.is_terminated:
+            self.builder.branch(cond_bb)
+
+        self.builder.position_at_end(end_bb)

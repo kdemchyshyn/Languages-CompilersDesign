@@ -4,8 +4,9 @@ KEYWORDS = {b"i32": "keyword", b"i64": "keyword", b"bool": "keyword",
             b"mut": "keyword", 
             b"exit": "keyword", 
             b"true": "keyword", b"false": "keyword",
-            b"if": "keyword", b"else": "keyword"}
-
+            b"if": "keyword", b"else": "keyword",
+            b"while": "keyword"}
+ 
 class Token:
     def __init__(self, kind, text, line, col):
         self.kind = kind

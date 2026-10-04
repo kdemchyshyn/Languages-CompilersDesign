@@ -1,5 +1,5 @@
 from errors import CompileError
-from nodes import ProgramNode, DeclNode, AssignNode, ExitNode, BinOpNode, VarNode, ConstNode, BoolNode, NotNode, BlockNode, IfNode
+from nodes import ProgramNode, DeclNode, AssignNode, ExitNode, BinOpNode, VarNode, ConstNode, BoolNode, NotNode, BlockNode, IfNode, WhileNode
 
 class Parser:
     def __init__(self, lines):
@@ -101,6 +101,8 @@ class Parser:
             return node
         elif tok.kind == "keyword" and tok.text == "if":
             return self.parse_if()
+        elif tok.kind == "keyword" and tok.text == "while":
+            return self.parse_while()
         elif tok.kind == "keyword" and tok.text == "else":
             self.error("'else' without an 'if'")
         else:
@@ -146,6 +148,30 @@ class Parser:
             else_block = self.parse_block("else")
             
         return IfNode(tok_if.line, tok_if.col, condition, then_block, else_block)
+
+    def parse_while(self):
+        tok_while = self.eat() # Eat "while"
+        condition = self.parse_expr()
+
+        # Verify nothing trails on the `while` line (preventing `while b {`)
+        if self.peek() is not None:
+            if self.peek().text == "{":
+                self.error("unexpected '{' after the statement")
+            else:
+                self.expect_end_of_line("the statement")
+
+        # Look ahead for '{' on its own line
+        next_l = self.peek_line()
+        if next_l is None or next_l[0].text != "{":
+            got = f"'{next_l[0].text}'" if next_l else "end of line"
+            line = next_l[0].line if next_l else self.current_line_num
+            col = next_l[0].col if next_l else self.last_col
+            raise CompileError(f"line {line}:{col}: expected {repr('{')} on its own line after 'while', got {got}")
+
+        self.next_line()
+        body = self.parse_block("while")
+
+        return WhileNode(tok_while.line, tok_while.col, condition, body)
 
     def parse_block(self, after_what):
         tok_brace = self.eat() # Eat "{"

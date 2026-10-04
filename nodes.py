@@ -86,6 +86,20 @@ class IfNode(StmtNode):
     def accept(self, visitor):
         return visitor.visit_if(self)
 
+class WhileNode(StmtNode):
+    def __init__(self, line, col, condition, body):
+        super().__init__(line, col)
+        self.condition = condition
+        self.body = body
+
+    def dump(self, indent=0):
+        print("  " * indent + "While")
+        self.condition.dump(indent + 1)
+        self.body.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_while(self)
+
 class ExprNode(Node):
     def __init__(self, line, col):
         super().__init__(line, col)

@@ -2,7 +2,7 @@ from errors import CompileError
 from nodes import (
     ProgramNode, DeclNode, AssignNode, ExitNode,
     BinOpNode, VarNode, ConstNode, BoolNode,
-    BlockNode, IfNode, NotNode
+    BlockNode, IfNode, NotNode, WhileNode
 )
 
 I32_MAX = 2147483647
@@ -109,6 +109,13 @@ class SemanticChecker:
         node.then_block.accept(self)
         if node.else_block:
             node.else_block.accept(self)
+
+    def visit_while(self, node):
+        cond_type = node.condition.accept(self)
+        if cond_type != "bool":
+            self.error(node, f"the condition of 'while' must be bool, got {cond_type}")
+
+        node.body.accept(self)
 
     def visit_not(self, node):
         operand_type = node.value.accept(self)
