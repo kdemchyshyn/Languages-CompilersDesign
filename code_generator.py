@@ -19,8 +19,9 @@ class CodeGen:
         self.module = ir.Module(name="practices")
         self.module.triple = llvm.get_default_triple()
 
-        main_fn = ir.Function(self.module, ir.FunctionType(I32, []), name="main")
-        self.builder = ir.IRBuilder(main_fn.append_basic_block("entry"))
+        self.function = ir.Function(self.module, ir.FunctionType(I32, []), name="main")
+        self.entry_block = self.function.append_basic_block("entry")
+        self.builder = ir.IRBuilder(self.entry_block)
 
         self.printf = ir.Function(
             self.module,
@@ -42,6 +43,15 @@ class CodeGen:
         gvar.initializer = ir.Constant(arr_ty, bytearray(data))
         return gvar
 
+    def _alloca_in_entry(self, typ, name):
+        current_block = self.builder.block
+
+        self.builder.position_at_start(self.entry_block)
+        ptr = self.builder.alloca(typ, name=name)
+
+        self.builder.position_at_end(current_block)
+        return ptr
+
     def coerce(self, value, have, want):
         if have == "i32" and want == "i64":
             return self.builder.sext(value, I64, name="wide")
@@ -56,7 +66,7 @@ class CodeGen:
         init_val = node.init.accept(self)
         init_val = self.coerce(init_val, node.init.type, node.type_name)
 
-        ptr = self.builder.alloca(TYPE_MAP[node.type_name], name=node.name)
+        ptr = self._alloca_in_entry(TYPE_MAP[node.type_name], node.name)
         self.builder.store(init_val, ptr)
 
         node.ptr = ptr
@@ -110,3 +120,35 @@ class CodeGen:
 
     def visit_bool(self, node):
         return ir.Constant(I1, 1 if node.value else 0)
+
+    def visit_block(self, node):
+        for stmt in node.statements:
+            stmt.accept(self)
+        if node.exit:
+            node.exit.accept(self)
+
+    def visit_if(self, node):
+        cond = node.condition.accept(self)
+
+        then_bb = self.function.append_basic_block("then")
+        else_bb = self.function.append_basic_block("else") if node.else_block else None
+        merge_bb = self.function.append_basic_block("merge")
+
+        self.builder.cbranch(cond, then_bb, else_bb or merge_bb)
+
+        self.builder.position_at_end(then_bb)
+        node.then_block.accept(self)
+        if not self.builder.block.is_terminated:
+            self.builder.branch(merge_bb)
+
+        if node.else_block:
+            self.builder.position_at_end(else_bb)
+            node.else_block.accept(self)
+            if not self.builder.block.is_terminated:
+                self.builder.branch(merge_bb)
+
+        self.builder.position_at_end(merge_bb)
+
+    def visit_not(self, node):
+        val = node.value.accept(self)
+        return self.builder.not_(val, name="nottmp")

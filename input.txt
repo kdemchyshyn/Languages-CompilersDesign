@@ -1,13 +1,11 @@
-i32 mut x {10}
-if true
+i32 mut a{10}
+bool b{true}
+if b
 {
-    bool mut x {true}
-
-    if x
-    {
-        i64 mut x {20}
-        exit x
-    }
-    exit x
+    a := a + 5
 }
-exit x
+else
+{
+    a := a - 5
+}
+exit a  
