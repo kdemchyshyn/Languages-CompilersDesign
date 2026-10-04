@@ -1,0 +1,8 @@
+bool a{true}
+bool b{false}
+if a
+{
+    exit b
+    bool f {false}
+}
+exit 0

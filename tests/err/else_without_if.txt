@@ -1,0 +1,8 @@
+i32 mut r{0}
+i64 n{3}
+
+else
+{
+    r := 2
+}
+exit r

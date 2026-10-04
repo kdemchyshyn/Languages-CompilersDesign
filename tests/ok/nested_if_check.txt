@@ -1,0 +1,10 @@
+i32 mut x {30}
+if true
+{
+    x := x + 2
+    if true
+    {
+        x := x - 1
+    }
+}
+exit x

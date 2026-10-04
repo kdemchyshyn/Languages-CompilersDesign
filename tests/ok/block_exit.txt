@@ -1,0 +1,7 @@
+i32 x{10}
+if true
+{
+    bool res{true}
+    exit res
+}
+exit false

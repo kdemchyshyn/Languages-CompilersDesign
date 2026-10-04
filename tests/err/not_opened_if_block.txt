@@ -1,0 +1,6 @@
+i32 mut x{10}
+if true
+
+    i64 x {0}
+}
+exit x
