@@ -81,6 +81,7 @@ class IfNode(StmtNode):
         self.condition.dump(indent + 1)
         self.then_block.dump(indent + 1)
         if self.else_block:
+            print("  " * indent + "Else")
             self.else_block.dump(indent + 1)
 
     def accept(self, visitor):
