@@ -1,0 +1,19 @@
+Program
+  Decl x i32 mut
+    Const 30
+  If
+    Bool true
+    Block
+      Assign x
+        BinOp +
+          Var x
+          Const 2
+      If
+        Bool true
+        Block
+          Assign x
+            BinOp -
+              Var x
+              Const 1
+  Exit
+    Var x

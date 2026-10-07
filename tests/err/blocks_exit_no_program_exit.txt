@@ -1,0 +1,5 @@
+bool a{true}
+if a
+{
+    exit a
+}

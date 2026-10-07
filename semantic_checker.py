@@ -1,7 +1,8 @@
 from errors import CompileError
 from nodes import (
     ProgramNode, DeclNode, AssignNode, ExitNode,
-    BinOpNode, VarNode, ConstNode, BoolNode
+    BinOpNode, VarNode, ConstNode, BoolNode,
+    BlockNode, IfNode, NotNode, WhileNode
 )
 
 I32_MAX = 2147483647
@@ -12,10 +13,16 @@ I64_MIN = -9223372036854775808
 
 class SemanticChecker:
     def __init__(self):
-        self.symbols = {}  # name -> DeclNode
+        self.scopes = [{}]  # name -> DeclNode
 
     def error(self, node, message):
         raise CompileError(f"line {node.line}:{node.col}: {message}")
+
+    def lookup(self, node, name):
+        for frame in reversed(self.scopes):
+            if name in frame:
+                return frame[name]
+        self.error(node, f"variable '{name}' is used before its declaration")
 
     def check_assignable(self, expr, want, at, what):
         have = expr.type
@@ -31,17 +38,15 @@ class SemanticChecker:
         node.exit.accept(self)
 
     def visit_decl(self, node):
-        if node.name in self.symbols:
-            self.error(node, f"variable '{node.name}' is already declared")
-
+        if node.name in self.scopes[-1]:
+            self.error(node, f"variable '{node.name}' is already declared in this block")
+            
         node.init.accept(self)
         self.check_assignable(node.init, node.type_name, node, f"initialise '{node.name}'")
-        self.symbols[node.name] = node
+        self.scopes[-1][node.name] = node
 
     def visit_assign(self, node):
-        if node.name not in self.symbols:
-            self.error(node, f"'{node.name}' is used before its declaration")
-        decl = self.symbols[node.name]
+        decl = self.lookup(node, node.name)
         if not decl.mutable:
             self.error(node, f"cannot assign to constant variable '{node.name}'")
         node.decl = decl
@@ -73,9 +78,7 @@ class SemanticChecker:
         return node.type
 
     def visit_var(self, node):
-        if node.name not in self.symbols:
-            self.error(node, f"'{node.name}' is used before its declaration")
-        node.decl = self.symbols[node.name]
+        node.decl = self.lookup(node, node.name)
         node.type = node.decl.type_name
         return node.type
 
@@ -89,5 +92,35 @@ class SemanticChecker:
         return node.type
 
     def visit_bool(self, node):
+        node.type = "bool"
+        return node.type
+
+    def visit_block(self, node):
+        self.scopes.append({})
+        for stmt in node.statements: stmt.accept(self)
+        if node.exit: node.exit.accept(self)
+        self.scopes.pop()
+
+    def visit_if(self, node):
+        cond_type = node.condition.accept(self)
+        if cond_type != "bool":
+            self.error(node, f"the condition of 'if' must be bool, got {cond_type}")
+        
+        node.then_block.accept(self)
+        if node.else_block:
+            node.else_block.accept(self)
+
+    def visit_while(self, node):
+        cond_type = node.condition.accept(self)
+        if cond_type != "bool":
+            self.error(node, f"the condition of 'while' must be bool, got {cond_type}")
+
+        node.body.accept(self)
+
+    def visit_not(self, node):
+        operand_type = node.value.accept(self)
+        if operand_type != "bool":
+            self.error(node, f"cannot apply '!' to {operand_type}")
+        
         node.type = "bool"
         return node.type
