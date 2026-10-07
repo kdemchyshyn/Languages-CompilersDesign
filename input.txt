@@ -1,7 +1,0 @@
-i32 mut a{0}
-i32 target {3}
-while a != target
-{
-    a := a + 1
-}
-exit a 

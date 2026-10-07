@@ -190,7 +190,7 @@ class Parser:
                 self.next_line()
                 
                 if not stmts and exit_node is None:
-                    raise CompileError(f"line {tok.line}:{tok.col}: empty block")
+                    raise CompileError(f"line {tok_brace.line}:{tok_brace.col}: empty block")
                 
                 return BlockNode(tok_brace.line, tok_brace.col, stmts, exit_node)
             
