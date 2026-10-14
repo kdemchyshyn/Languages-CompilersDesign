@@ -1,17 +1,25 @@
-factor     ::= number | ident | "true" | "false" | "!" factor
-type       ::= "i32" | "i64" | "bool"
+factor     ::= number | ident | "true" | "false" | "!" factor | field | call
+type       ::= "i32" | "i64" | "bool" | ident
 NL         ::= "\n"
 
 term       ::= factor { "*" factor }
 arith      ::= term { ("+" | "-") term }
 expr       ::= arith [ ("==" | "!=") arith ] 
-block      ::= "{" NL { statement } [ exit NL ] "}" NL      (not empty)
 
-decl       ::= type [ "mut" ] ident "{" expr "}"
-assign     ::= ident ":=" expr
+decl       ::= type [ "mut" ] ident "{" expr { "," expr } "}"
+assign     ::= ident { "." ident } ":=" expr
 exit       ::= "exit" factor
+
+block      ::= "{" NL { statement } [ exit NL ] "}" NL      (not empty)
 if         ::= "if" expr NL block [ "else" NL block ]
 while      ::= "while" expr NL block
 
+field      ::= ident "." ident { "." ident }
+field_decl ::= type [ "mut" ] ident NL
+struct     ::= "struct" ident NL "{" NL field_decl { field_decl } "}" NL
+
+call       ::= ident "(" [ expr { "," expr } ] ")"
+fn         ::= "fn" ident ":=" "(" [ type ident { "," type ident } ] ")" "->" type NL block
+
 statement  ::= decl | assign | if | while
-program    ::= { statement } exit
+program    ::= { struct } { fn } { statement } exit
