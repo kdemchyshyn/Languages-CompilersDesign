@@ -9,7 +9,8 @@ from nodes import (
     FieldNode, CallNode,
     NotNode, 
     BlockNode, 
-    IfNode, WhileNode
+    IfNode, WhileNode,
+    InitListNode
 )
 
 class Parser:
@@ -364,17 +365,10 @@ class Parser:
         
         if self.peek() is None or self.peek().kind != "lbrace":
             self.error(f"variable '{name.text}' needs an initialiser in {{}}")
-        self.eat() # Eat "{"
         
-        values = []
-        values.append(self.parse_expr())
-        while self.peek() is not None and self.peek().kind == "coma":
-            self.eat()
-            values.append(self.parse_expr())
-
-        self.expect("rbrace", "'}'")
+        init_node = self.parse_init_list()
         
-        return DeclNode(name.line, name.col, name.text, type_tok.text, mutable, values)
+        return DeclNode(name.line, name.col, name.text, type_tok.text, mutable, init_node)
 
     def parse_assign(self):
         name = self.eat() # We know it's ident from parse_statement
@@ -464,3 +458,25 @@ class Parser:
             self.error("expected a constant or a variable, got '('")
         else:
             self.error(f"expected a constant or a variable, got '{tok.text}'")
+
+    def parse_init_list(self):
+        tok_lbrace = self.eat() # Eat "{"
+        
+        values = []
+        values.append(self.parse_init_val())
+        while self.peek() is not None and self.peek().kind == "coma":
+            self.eat() # Eat ","
+            values.append(self.parse_init_val())
+
+        self.expect("rbrace", "'}'")
+        
+        return InitListNode(tok_lbrace.line, tok_lbrace.col, values)
+
+    def parse_init_val(self):
+        tok = self.peek()
+        # If we see a '{', we enter a nested initialization list
+        if tok is not None and tok.kind == "lbrace":
+            return self.parse_init_list()
+        # Otherwise, parse a standard expression
+        else:
+            return self.parse_expr()
