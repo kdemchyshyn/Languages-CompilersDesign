@@ -159,7 +159,7 @@ class SemanticChecker:
                     node.is_copy_init = True
                     
             if not node.is_copy_init:
-                self.check_initializer(node, node.init, struct_info)
+                self.check_initializer(node, node.init.values, struct_info)
 
         self.scopes[-1][node.name] = node
 
