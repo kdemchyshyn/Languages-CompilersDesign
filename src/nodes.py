@@ -46,6 +46,21 @@ class FieldDeclNode(Node):
         return visitor.visit_field_decl(self)
 
 
+class NestedStructInitNode(Node):
+    def __init__(self, line, col, values):
+        super().__init__(line, col)
+        self.values = values
+        self.type_name = None
+
+    def dump(self, indent=0):
+        print("  " * indent + "NestedStructInit")
+        for val in self.values:
+            val.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_nested_struct_init(self)
+    
+
 class StructNode(Node):
     def __init__(self, line, col, name, fields):
         super().__init__(line, col)
