@@ -6,7 +6,10 @@ term       ::= factor { "*" factor }
 arith      ::= term { ("+" | "-") term }
 expr       ::= arith [ ("==" | "!=") arith ] 
 
-decl       ::= type [ "mut" ] ident "{" expr { "," expr } "}"
+init_list  ::= "{" init_val { "," init_val } "}"
+init_val   ::= expr | init_list
+
+decl       ::= type [ "mut" ] ident init_list
 assign     ::= ident { "." ident } ":=" expr
 exit       ::= "exit" factor
 
