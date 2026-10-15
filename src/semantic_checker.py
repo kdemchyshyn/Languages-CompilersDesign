@@ -140,9 +140,9 @@ class SemanticChecker:
             self.error(node, f"unknown type '{type_name}'")
 
         if type_name in ("i32", "i64", "bool"):
-            if len(node.values) != 1:
+            if len(node.init.values) != 1:
                 self.error(node, f"expected exactly 1 initializer for {type_name}")
-            val = node.values[0]
+            val = node.init.values[0]
             if isinstance(val, InitListNode):
                 self.error(val, "nested {} initializer not allowed for built-in types")
             have = val.accept(self)
@@ -152,14 +152,14 @@ class SemanticChecker:
             node.is_copy_init = False
             
             # Check for whole-object copy
-            if len(node.values) == 1 and not isinstance(node.values[0], InitListNode):
-                val = node.values[0]
+            if len(node.init.values) == 1 and not isinstance(node.init.values[0], InitListNode):
+                val = node.init.values[0]
                 have = val.accept(self)
                 if have == type_name:
                     node.is_copy_init = True
                     
             if not node.is_copy_init:
-                self.check_initializer(node, node.values, struct_info)
+                self.check_initializer(node, node.init, struct_info)
 
         self.scopes[-1][node.name] = node
 
