@@ -110,18 +110,17 @@ class FunctionNode(Node):
 class StmtNode(Node): pass
 
 class DeclNode(StmtNode):
-    def __init__(self, line, col, name, type_name, mutable, values):
+    def __init__(self, line, col, name, type_name, mutable, init):
         super().__init__(line, col)
         self.name = name
         self.type_name = type_name
         self.mutable = mutable
-        self.values = values
+        self.init = init
 
     def dump(self, indent=0):
         mut_str = "mut" if self.mutable else "const"
         print("  " * indent + f"Decl {self.name} {self.type_name} {mut_str}")
-        for value in self.values:
-            value.dump(indent + 1)
+        self.init.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_decl(self)
