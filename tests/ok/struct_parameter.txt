@@ -1,0 +1,14 @@
+struct Point
+{
+    i32 x
+    i32 y
+}
+
+fn sum_coords := (Point p) -> i32
+{
+    i32 res{p.x + p.y}
+    exit res
+}
+
+Point pt{15, 25}
+exit sum_coords(pt)

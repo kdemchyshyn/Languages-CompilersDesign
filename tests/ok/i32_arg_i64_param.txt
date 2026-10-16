@@ -1,0 +1,8 @@
+fn add_i64 := (i64 a, i64 b) -> i64
+{
+    i64 res {a + b}
+    exit res
+}
+i32 x{25}
+i64 res{add_i64(x, 15)}
+exit res

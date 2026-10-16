@@ -1,0 +1,15 @@
+struct Point
+{
+    i32 x
+    i32 y
+}
+
+fn make_point := (i32 x, i32 y) -> Point
+{
+    Point p{x, y}
+    exit p
+}
+
+Point pt{make_point(35, 45)}
+i32 res {pt.x + pt.y}
+exit res

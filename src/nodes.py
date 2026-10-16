@@ -10,19 +10,92 @@ class Node:
         raise NotImplementedError()
 
 class ProgramNode(Node):
-    def __init__(self, line, col, statements, exit_node):
+    def __init__(self, line, col, structs, functions, statements, exit_node):
         super().__init__(line, col)
+        self.structs = structs
+        self.functions = functions
         self.statements = statements
         self.exit = exit_node
 
     def dump(self, indent=0):
         print("  " * indent + "Program")
+        for struct in self.structs:
+            struct.dump(indent + 1)
+        for func in self.functions:
+            func.dump(indent + 1)
         for stmt in self.statements:
             stmt.dump(indent + 1)
         self.exit.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_program(self)
+
+
+class FieldDeclNode(Node):
+    def __init__(self, line, col, name, type_name, mutable):
+        super().__init__(line, col)
+        self.name = name
+        self.type_name = type_name
+        self.mutable = mutable
+
+    def dump(self, indent=0):
+        mut_str = "mut" if self.mutable else "const"
+        print("  " * indent + f"FieldDecl {self.name} {self.type_name} {mut_str}")
+
+
+class InitListNode(Node):
+    def __init__(self, line, col, values):
+        super().__init__(line, col)
+        self.values = values
+        self.type_name = None
+
+    def dump(self, indent=0):
+        print("  " * indent + "InitList")
+        for val in self.values:
+            val.dump(indent + 1)
+    
+
+class StructNode(Node):
+    def __init__(self, line, col, name, fields):
+        super().__init__(line, col)
+        self.name = name
+        self.fields = fields
+
+    def dump(self, indent=0):
+        print("  " * indent + f"Struct {self.name}")
+        for field in self.fields:
+            field.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_struct(self)
+
+
+class ParamNode(Node):
+    def __init__(self, line, col, name, type_name):
+        super().__init__(line, col)
+        self.name = name
+        self.type_name = type_name
+
+    def dump(self, indent=0):
+        print("  " * indent + f"Param {self.name} {self.type_name}")
+
+
+class FunctionNode(Node):
+    def __init__(self, line, col, name, return_type, params, body):
+        super().__init__(line, col)
+        self.name = name
+        self.return_type = return_type
+        self.params = params
+        self.body = body
+
+    def dump(self, indent=0):
+        print("  " * indent + f"Function {self.name} {self.return_type}")
+        for param in self.params:
+            param.dump(indent + 1)
+        self.body.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_function(self)
 
 
 class StmtNode(Node): pass
@@ -44,14 +117,17 @@ class DeclNode(StmtNode):
         return visitor.visit_decl(self)
 
 class AssignNode(StmtNode):
-    def __init__(self, line, col, name, value):
+    def __init__(self, line, col, name, fields, value):
         super().__init__(line, col)
         self.name = name
+        self.fields = fields
         self.value = value
         self.decl = None
+        self.field_indices = []
 
     def dump(self, indent=0):
-        print("  " * indent + f"Assign {self.name}")
+        path = ".".join([self.name] + self.fields)
+        print("  " * indent + f"Assign {path}")
         self.value.dump(indent + 1)
 
     def accept(self, visitor):
@@ -104,6 +180,38 @@ class ExprNode(Node):
     def __init__(self, line, col):
         super().__init__(line, col)
         self.type = None
+
+class FieldNode(ExprNode):
+    def __init__(self, line, col, base_name, fields):
+        super().__init__(line, col)
+        self.base_name = base_name
+        self.fields = fields
+        self.decl = None
+        self.field_indices = []
+
+    def dump(self, indent=0):
+        path = ".".join([self.base_name] + self.fields)
+        print("  " * indent + f"Field {path}")
+
+    def accept(self, visitor):
+        return visitor.visit_field(self)
+
+
+class CallNode(ExprNode):
+    def __init__(self, line, col, func_name, args):
+        super().__init__(line, col)
+        self.func_name = func_name
+        self.args = args
+        self.fn_decl = None
+        self.widen_args = []
+
+    def dump(self, indent=0):
+        print("  " * indent + f"Call {self.func_name}")
+        for arg in self.args:
+            arg.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_call(self)
 
 class BinOpNode(ExprNode):
     def __init__(self, line, col, op, left, right):

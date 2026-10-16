@@ -1,0 +1,24 @@
+Program
+  Struct Point
+    FieldDecl x i32 const
+    FieldDecl y i32 const
+  Struct Circle
+    FieldDecl center Point const
+    FieldDecl radius i32 const
+  Struct Ring
+    FieldDecl inner Circle const
+    FieldDecl outer Circle const
+  Decl r Ring const
+    InitList
+      InitList
+        InitList
+          Const 10
+          Const 20
+        Const 5
+      InitList
+        InitList
+          Const 30
+          Const 40
+        Const 15
+  Exit
+    Field r.inner.center.x

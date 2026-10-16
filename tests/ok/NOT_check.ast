@@ -1,14 +1,18 @@
 Program
   Decl a bool const
-    Bool true
+    InitList
+      Bool true
   Decl b bool const
-    Bool false
+    InitList
+      Bool false
   Decl c bool const
-    Not
-      Var a
+    InitList
+      Not
+        Var a
   Decl d bool mut
-    Not
-      Var b
+    InitList
+      Not
+        Var b
   Assign d
     Not
       Var c

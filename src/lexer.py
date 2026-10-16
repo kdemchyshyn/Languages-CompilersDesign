@@ -5,7 +5,8 @@ KEYWORDS = {b"i32": "keyword", b"i64": "keyword", b"bool": "keyword",
             b"exit": "keyword", 
             b"true": "keyword", b"false": "keyword",
             b"if": "keyword", b"else": "keyword",
-            b"while": "keyword"}
+            b"while": "keyword",
+            b"struct": "keyword", b"fn": "keyword"}
  
 class Token:
     def __init__(self, kind, text, line, col):
@@ -42,12 +43,16 @@ def lex(data: bytes):
             elif is_digit(b): state, start = "NUMBER", i
             elif b == ord("{"): tokens.append(Token("lbrace", "{", line, col))
             elif b == ord("+"): tokens.append(Token("operation", "+", line, col))
-            elif b == ord("-"): tokens.append(Token("operation", "-", line, col))
+            elif b == ord("-"): state, start = "MINUS", i
             elif b == ord("*"): tokens.append(Token("operation", "*", line, col))
             elif b == ord("}"): tokens.append(Token("rbrace", "}", line, col))
             elif b == ord(":"): state, start = "ASSIGN", i
             elif b == ord("="): state, start = "EQUAL", i
             elif b == ord("!"): state, start = "NOT", i
+            elif b == ord("."): tokens.append(Token("dot", ".", line, col))
+            elif b == ord(","): tokens.append(Token("coma", ",", line, col))
+            elif b == ord("("): tokens.append(Token("lparen", "(", line, col))
+            elif b == ord(")"): tokens.append(Token("rparen", ")", line, col))
             else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
         elif state == "IDENT":
             if b is not None and (is_alpha(b) or is_digit(b)): pass
@@ -74,6 +79,13 @@ def lex(data: bytes):
                 state = "START"
             else: 
                 tokens.append(Token("operation", "!", line, col - 1))
+                state = "START"; continue # re-read this byte in START
+        elif state == "MINUS":
+            if b == ord(">"):
+                tokens.append(Token("arrow", "->", line, col - 1))
+                state = "START"
+            else:
+                tokens.append(Token("operation", "-", line, col - 1))
                 state = "START"; continue # re-read this byte in START
         i += 1; col += 1
     if tokens: lines.append(tokens)
