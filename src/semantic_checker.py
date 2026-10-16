@@ -119,15 +119,18 @@ class SemanticChecker:
     def visit_function(self, node):
         saved_scopes = self.scopes
         self.scopes = [{}]
-        
+
         for p in node.params:
-            # Parameters are copies and cannot be changed in the body, so mutable=False
+        # Parameters are copies and cannot be changed in the body, so mutable=False
             decl = DeclNode(p.line, p.col, p.name, p.type_name, False, [])
             self.scopes[0][p.name] = decl
-            
+
         self.current_fn_return_type = node.return_type
-        node.body.accept(self)
-        
+        for stmt in node.body.statements:
+            stmt.accept(self)
+        if node.body.exit:
+            node.body.exit.accept(self)
+
         self.scopes = saved_scopes
         self.current_fn_return_type = None
 
@@ -141,7 +144,7 @@ class SemanticChecker:
 
         if type_name in ("i32", "i64", "bool"):
             if len(node.init.values) != 1:
-                self.error(node, f"expected exactly 1 initializer for {type_name}")
+                self.error(node.init, f"expected exactly 1 initializer for {type_name}")
             val = node.init.values[0]
             if isinstance(val, InitListNode):
                 self.error(val, "nested {} initializer not allowed for built-in types")
@@ -159,7 +162,7 @@ class SemanticChecker:
                     node.is_copy_init = True
                     
             if not node.is_copy_init:
-                self.check_initializer(node, node.init.values, struct_info)
+                self.check_initializer(node.init, node.init.values, struct_info)
 
         self.scopes[-1][node.name] = node
 
@@ -174,7 +177,7 @@ class SemanticChecker:
                 val.struct_type = f_info.type_name
                 self.check_initializer(val, val.values, self.structs[f_info.type_name])
             else:
-                have = val.accept(self)
+                have = val.type if val.type is not None else val.accept(self)
                 if f_info.type_name in self.structs:
                     if have != f_info.type_name:
                         self.error(val, f"cannot initialize field '{f_name}' of type {f_info.type_name} with {have}")
@@ -228,8 +231,9 @@ class SemanticChecker:
         rt = node.right.accept(self)
 
         if node.op in ("+", "-", "*"):
-            if lt == "bool" or rt == "bool":
-                self.error(node, f"cannot apply '{node.op}' to bool")
+            if lt not in ("i32", "i64") or rt not in ("i32", "i64"):
+                bad_type = lt if lt not in ("i32", "i64") else rt
+                self.error(node, f"cannot apply '{node.op}' to {bad_type}")
             node.type = "i64" if ("i64" in (lt, rt)) else "i32"
         elif node.op in ("==", "!="):
             both_int = lt in ("i32", "i64") and rt in ("i32", "i64")
@@ -294,7 +298,8 @@ class SemanticChecker:
         decl = self.lookup(node, node.base_name)
         node.decl = decl
         current_type = decl.type_name
-        
+
+        node.field_indices = []
         for f_name in node.fields:
             if current_type not in self.structs:
                 self.error(node, f"cannot access field '{f_name}' on non-struct type {current_type}")
@@ -316,7 +321,8 @@ class SemanticChecker:
         
         if len(node.args) != len(fn_info.params):
             self.error(node, f"wrong number of arguments for '{node.func_name}': expected {len(fn_info.params)}, got {len(node.args)}")
-            
+
+        node.widen_args = []
         for arg, param in zip(node.args, fn_info.params):
             arg_type = arg.accept(self)
             if arg_type == param.type_name:

@@ -285,10 +285,13 @@ class CodeGen:
         self.builder.position_at_end(end_bb)
 
     def _gep_chain(self, base_slot, field_indices):
-        indices = [ir.Constant(ir.IntType(32), 0)] + [
-            ir.Constant(ir.IntType(32), idx) for idx in field_indices
-        ]
-        return self.builder.gep(base_slot, indices, inbounds=True)
+        ptr = base_slot
+        zero = ir.Constant(I32, 0)
+        for idx in field_indices:
+            ptr = self.builder.gep(
+                ptr, [zero, ir.Constant(I32, idx)], inbounds=True
+            )
+        return ptr
 
     def visit_field(self, node):
         base_ptr = getattr(node.decl, 'ptr', None)

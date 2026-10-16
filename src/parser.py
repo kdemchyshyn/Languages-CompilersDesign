@@ -206,7 +206,7 @@ class Parser:
         body = self.parse_block("fn")
         
         if body.exit is None:
-            self.error("function block must end with an exit statement")
+            raise CompileError(f"line {body.line}:{body.col}: function block must end with an exit statement")
             
         return FunctionNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
 

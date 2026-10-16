@@ -42,9 +42,6 @@ class FieldDeclNode(Node):
         mut_str = "mut" if self.mutable else "const"
         print("  " * indent + f"FieldDecl {self.name} {self.type_name} {mut_str}")
 
-    def accept(self, visitor):
-        return visitor.visit_field_decl(self)
-
 
 class InitListNode(Node):
     def __init__(self, line, col, values):
@@ -56,9 +53,6 @@ class InitListNode(Node):
         print("  " * indent + "InitList")
         for val in self.values:
             val.dump(indent + 1)
-
-    def accept(self, visitor):
-        return visitor.visit_init_list(self)
     
 
 class StructNode(Node):
@@ -84,9 +78,6 @@ class ParamNode(Node):
 
     def dump(self, indent=0):
         print("  " * indent + f"Param {self.name} {self.type_name}")
-
-    def accept(self, visitor):
-        return visitor.visit_param(self)
 
 
 class FunctionNode(Node):
