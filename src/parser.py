@@ -2,11 +2,11 @@ from errors import CompileError
 from nodes import (
     ProgramNode, 
     StructNode, FieldDeclNode,
-    FunctionNode, ParamNode,
+    FunctionNode, ParamNode, MemberFnNode,
     DeclNode, AssignNode, ExitNode, 
     BinOpNode, 
     VarNode, ConstNode, BoolNode, 
-    FieldNode, CallNode,
+    FieldNode, CallNode, MemberCallNode,
     NotNode, 
     BlockNode, 
     IfNode, WhileNode,
@@ -135,7 +135,7 @@ class Parser:
         self.next_line()
         
         fields = []
-        while self.toks and self.peek().text != "}":
+        while self.toks and self.peek().text != "}" and not (self.peek().kind == "keyword" and self.peek().text == "fn"):
             tok_type = self.peek()
             if tok_type.kind not in ("keyword", "ident"):
                 self.error("expected a type for field")
@@ -152,7 +152,19 @@ class Parser:
             self.next_line()
             
         if not fields:
-            self.error("empty struct")
+            tok = self.peek()
+            if tok is not None and tok.kind == "keyword" and tok.text == "fn":
+                raise CompileError(f"line {tok.line}:{tok.col}: member function before the first field")
+            else:
+                self.error("empty struct")
+
+        methods = []
+        while self.toks and self.peek() is not None and self.peek().text != "}":
+            tok = self.peek()
+            if tok.kind == "keyword" and tok.text == "fn":
+                methods.append(self.parse_member_fn())
+            else:
+                raise CompileError(f"line {tok.line}:{tok.col}: field declaration is not allowed after member functions")
             
         if not self.toks or self.peek().text != "}":
             self.error("expected '}'")
@@ -160,7 +172,7 @@ class Parser:
         self.expect_end_of_line("the '}'")
         self.next_line()
         
-        return StructNode(tok_struct.line, tok_struct.col, name.text, fields)
+        return StructNode(tok_struct.line, tok_struct.col, name.text, fields, methods)
 
     def parse_fn(self):
         tok_fn = self.eat() # Eat "fn"
@@ -209,6 +221,54 @@ class Parser:
             raise CompileError(f"line {body.line}:{body.col}: function block must end with an exit statement")
             
         return FunctionNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
+
+    def parse_member_fn(self):
+            tok_fn = self.eat() # Eat "fn"
+            name = self.expect("ident", "function name")
+            
+            self.expect("assign", "':='")
+            self.expect("lparen", "'('")
+            
+            params = []
+            if self.peek() is not None and self.peek().kind != "rparen":
+                while True:
+                    tok_type = self.peek()
+                    if tok_type is None or tok_type.kind not in ("keyword", "ident"):
+                        self.error("expected a type for parameter")
+                    type_name = self.eat().text
+                    
+                    param_name = self.expect("ident", "parameter name")
+                    params.append(ParamNode(tok_type.line, tok_type.col, param_name.text, type_name))
+                    
+                    if self.peek() is not None and self.peek().kind == "coma":
+                        self.eat()
+                    else:
+                        break
+                        
+            self.expect("rparen", "')'")
+            self.expect("arrow", "'->'")
+            
+            ret_tok = self.peek()
+            if ret_tok is None or ret_tok.kind not in ("keyword", "ident"):
+                self.error("expected return type")
+            ret_type = self.eat().text
+            
+            self.expect_end_of_line("function signature")
+            
+            next_l = self.peek_line()
+            if next_l is None or next_l[0].text != "{":
+                got = f"'{next_l[0].text}'" if next_l else "end of line"
+                line = next_l[0].line if next_l else self.current_line_num
+                col = next_l[0].col if next_l else self.last_col
+                raise CompileError(f"line {line}:{col}: expected {'{'} on its own line after function signature, got {got}")
+            
+            self.next_line()
+            body = self.parse_block("fn")
+            
+            if body.exit is None:
+                raise CompileError(f"line {body.line}:{body.col}: function block must end with an exit statement")
+                
+            return MemberFnNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
 
     def parse_statement(self):
         tok = self.peek()
@@ -377,6 +437,10 @@ class Parser:
         while self.peek() is not None and self.peek().kind == "dot":
             self.eat()
             field_ident = self.expect("ident", "field name")
+
+            if self.peek() is not None and self.peek().kind == "lparen":
+                self.error("A call alone is not a statement")
+
             fields.append(field_ident.text)
         
         tok = self.peek()
@@ -448,9 +512,24 @@ class Parser:
                 # FieldNode
                 fields = []
                 while self.peek() is not None and self.peek().kind == "dot":
-                    self.eat()
-                    field = self.expect("ident", "field name")
-                    fields.append(field.text)
+                    self.eat() # Eat "."
+                    field_tok = self.expect("ident", "field or member function name")
+                    if self.peek() is not None and self.peek().kind == "lparen":
+                        # This identifier is a member function call!
+                        self.eat() # Eat "("
+
+                        args = []
+                        if self.peek() is not None and self.peek().kind != "rparen":
+                            args.append(self.parse_expr())
+                            while self.peek() is not None and self.peek().kind == "coma":
+                                self.eat()
+                                args.append(self.parse_expr())
+                        self.expect("rparen", "')'")
+
+                        target = FieldNode(ident_tok.line, ident_tok.col, ident_tok.text, fields) if fields else VarNode(ident_tok.line, ident_tok.col, ident_tok.text)
+                        return MemberCallNode(ident_tok.line, ident_tok.col, field_tok.text, target, args)
+                    
+                    fields.append(field_tok.text)
                 return FieldNode(ident_tok.line, ident_tok.col, ident_tok.text, fields)
             else:
                 return VarNode(ident_tok.line, ident_tok.col, ident_tok.text)

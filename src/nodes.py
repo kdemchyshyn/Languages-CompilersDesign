@@ -56,15 +56,19 @@ class InitListNode(Node):
     
 
 class StructNode(Node):
-    def __init__(self, line, col, name, fields):
+    def __init__(self, line, col, name, fields, methods=None):
         super().__init__(line, col)
         self.name = name
         self.fields = fields
+        self.methods = methods
 
     def dump(self, indent=0):
         print("  " * indent + f"Struct {self.name}")
         for field in self.fields:
             field.dump(indent + 1)
+        if self.methods:
+            for method in self.methods:
+                method.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_struct(self)
@@ -89,7 +93,7 @@ class FunctionNode(Node):
         self.body = body
 
     def dump(self, indent=0):
-        print("  " * indent + f"Function {self.name} {self.return_type}")
+        print("  " * indent + f"Function {self.name} -> {self.return_type}")
         for param in self.params:
             param.dump(indent + 1)
         self.body.dump(indent + 1)
@@ -97,6 +101,23 @@ class FunctionNode(Node):
     def accept(self, visitor):
         return visitor.visit_function(self)
 
+
+class MemberFnNode(Node):
+    def __init__(self, line, col, name, return_type, params, body):
+        super().__init__(line, col)
+        self.name = name
+        self.return_type = return_type
+        self.params = params
+        self.body = body
+
+    def dump(self, indent=0):
+        print("  " * indent + f"MemberFn {self.name} -> {self.return_type}")
+        for param in self.params:
+            param.dump(indent + 1)
+        self.body.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_member_fn(self)
 
 class StmtNode(Node): pass
 
@@ -212,6 +233,27 @@ class CallNode(ExprNode):
 
     def accept(self, visitor):
         return visitor.visit_call(self)
+
+
+class MemberCallNode(ExprNode):
+    def __init__(self, line, col, name, target, args):
+        super().__init__(line, col)
+        self.name = name
+        self.target = target #VarNode or FieldNode
+        self.args = args
+        self.fn_decl = None
+        self.widen_args = []
+        self.struct_name = None
+
+    def dump(self, indent=0):
+        print("  " * indent + f"MemberCall {self.name}")
+        self.target.dump(indent + 1)
+        for arg in self.args:
+            arg.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_member_call(self)
+
 
 class BinOpNode(ExprNode):
     def __init__(self, line, col, op, left, right):
