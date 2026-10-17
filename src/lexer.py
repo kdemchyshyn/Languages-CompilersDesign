@@ -6,7 +6,8 @@ KEYWORDS = {b"i32": "keyword", b"i64": "keyword", b"bool": "keyword",
             b"true": "keyword", b"false": "keyword",
             b"if": "keyword", b"else": "keyword",
             b"while": "keyword",
-            b"struct": "keyword", b"fn": "keyword"}
+            b"struct": "keyword", b"fn": "keyword",
+            b"read": "keyword", b"print": "keyword"}
  
 class Token:
     def __init__(self, kind, text, line, col):
@@ -28,7 +29,7 @@ def is_digit(b):
 
 def lex(data: bytes):
     lines, tokens = [], []
-    state, start, line, col = "START", 0, 1, 1
+    state, start, start_col, line, col = "START", 0, 0, 1, 1
     i = 0
     while i <= len(data): # one extra step: the end of input
         b = data[i] if i < len(data) else None
@@ -53,6 +54,7 @@ def lex(data: bytes):
             elif b == ord(","): tokens.append(Token("coma", ",", line, col))
             elif b == ord("("): tokens.append(Token("lparen", "(", line, col))
             elif b == ord(")"): tokens.append(Token("rparen", ")", line, col))
+            elif b == ord('"'): state, start, start_col = "STRING", i, col
             else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
         elif state == "IDENT":
             if b is not None and (is_alpha(b) or is_digit(b)): pass
@@ -87,6 +89,13 @@ def lex(data: bytes):
             else:
                 tokens.append(Token("operation", "-", line, col - 1))
                 state = "START"; continue # re-read this byte in START
+        elif state == "STRING":
+            if b is None or b == 10 or b == 13:
+                raise CompileError(f"line {line}:{start_col}: string literal not closed on its line")
+            elif b == ord('"'):
+                text = data[start+1:i].decode()
+                tokens.append(Token("string", text, line, start_col))
+                state = "START"
         i += 1; col += 1
     if tokens: lines.append(tokens)
     return lines

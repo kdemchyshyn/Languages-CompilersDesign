@@ -1,4 +1,8 @@
-factor     ::= number | ident | "true" | "false" | "!" factor | field | call | member_call
+string      ::= '"' { any_byte_except_quote_and_NL } '"'
+print       ::= "print" "(" ( string | expr ) ")"
+read       ::= "read" "(" ")"
+
+factor     ::= number | ident | "true" | "false" | "!" factor | field | call | member_call | read
 type       ::= "i32" | "i64" | "bool" | ident
 NL         ::= "\n"
 
@@ -25,5 +29,5 @@ struct     ::= "struct" ident NL "{" NL field_decl { field_decl } { fn } "}" NL
 call       ::= ident "(" [ expr { "," expr } ] ")"
 fn         ::= "fn" ident ":=" "(" [ type ident { "," type ident } ] ")" "->" type NL block
 
-statement  ::= decl | assign | if | while
+statement  ::= decl | assign | if | while | print
 program    ::= { struct } { fn } { statement } exit
