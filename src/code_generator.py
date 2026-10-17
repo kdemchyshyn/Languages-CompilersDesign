@@ -1,6 +1,6 @@
 from llvmlite import ir
 import llvmlite.binding as llvm
-from nodes import InitListNode
+from nodes import InitListNode, VarNode, FieldNode
 
 I1 = ir.IntType(1)
 I8 = ir.IntType(8)
@@ -40,6 +40,9 @@ class CodeGen:
         self.struct_field_types = {}
         self.llvm_functions = {}
         self.current_fn_params = {}
+
+        self.llvm_member_functions = {}
+        self.current_this_ptr = None
 
     def _make_global_str(self, name, data):
         arr_ty = ir.ArrayType(I8, len(data))
@@ -81,12 +84,25 @@ class CodeGen:
             llvm_st = self.struct_types[struct_decl.name]
             llvm_st.set_body(*[self.get_llvm_type(f.type_name) for f in struct_decl.fields])
 
+        for struct_decl in node.structs:
+            this_ptr_type = ir.PointerType(self.struct_types[struct_decl.name])
+            for fn in struct_decl.methods:
+                param_types = [this_ptr_type] + [self.get_llvm_type(p.type_name) for p in fn.params]
+                ret_type = self.get_llvm_type(fn.return_type)
+                fn_type = ir.FunctionType(ret_type, param_types)
+                llvm_fn = ir.Function(self.module, fn_type, name=f"{struct_decl.name}_{fn.name}")
+                self.llvm_member_functions[(struct_decl.name, fn.name)] = llvm_fn
+
         # Declare all user functions with an IR prefix
         for fn in node.functions:
             param_types = [self.get_llvm_type(p.type_name) for p in fn.params]
             ret_type = self.get_llvm_type(fn.return_type)
             fn_type = ir.FunctionType(ret_type, param_types)
             self.llvm_functions[fn.name] = ir.Function(self.module, fn_type, name=f"_user_{fn.name}")
+
+        for struct_decl in node.structs:
+            for fn in struct_decl.methods:
+                self.visit_member_fn(fn, struct_decl.name)
 
         # Generate user function bodies
         for fn in node.functions:
@@ -121,6 +137,37 @@ class CodeGen:
         self.builder = saved_builder
         self.entry_block = saved_entry
         self.current_fn_params = saved_params
+
+    def visit_member_fn(self, node, struct_name):
+        saved_func = self.function
+        saved_builder = self.builder
+        saved_entry = self.entry_block
+        saved_params = self.current_fn_params.copy()
+        saved_this_ptr = self.current_this_ptr
+
+        llvm_fn = self.llvm_member_functions[(struct_name, node.name)]
+        self.function = llvm_fn
+        self.entry_block = self.function.append_basic_block("entry")
+        self.builder = ir.IRBuilder(self.entry_block)
+
+        # First argument is 'this', do NOT alloca or load, keep it as pointer
+        self.current_this_ptr = llvm_fn.args[0]
+        self.current_this_ptr.name = "this"
+
+        self.current_fn_params = {}
+        for p, arg in zip(node.params, llvm_fn.args[1:]):
+            slot = self._alloca_in_entry(self.get_llvm_type(p.type_name), p.name)
+            self.builder.store(arg, slot)
+            p.slot = slot
+            self.current_fn_params[p.name] = slot
+
+        node.body.accept(self)
+
+        self.function = saved_func
+        self.builder = saved_builder
+        self.entry_block = saved_entry
+        self.current_fn_params = saved_params
+        self.current_this_ptr = saved_this_ptr
 
     def eval_init_val(self, init_val, expected_type_name):
         if isinstance(init_val, InitListNode):
@@ -160,9 +207,12 @@ class CodeGen:
         node.ptr = ptr
 
     def visit_assign(self, node):
-        base_ptr = getattr(node.decl, 'ptr', None)
-        if base_ptr is None:
-            base_ptr = self.current_fn_params[node.name]
+        if getattr(node, 'is_this_field', False):
+            base_ptr = self.current_this_ptr
+        else:
+            base_ptr = getattr(node.decl, 'ptr', None)
+            if base_ptr is None:
+                base_ptr = self.current_fn_params[node.name]
 
         if getattr(node, 'field_indices', []):
             ptr = self._gep_chain(base_ptr, node.field_indices)
@@ -222,6 +272,10 @@ class CodeGen:
             return self.builder.icmp_signed(node.op, left, right, name="cmptmp")
 
     def visit_var(self, node):
+        if getattr(node, 'is_this_field', False):
+            ptr = self._gep_chain(self.current_this_ptr, [node.field_index])
+            return self.builder.load(ptr, name=node.name)
+
         ptr = getattr(node.decl, 'ptr', None)
         if ptr is None:
             # Fallback for parameters which populate current_fn_params
@@ -294,9 +348,12 @@ class CodeGen:
         return ptr
 
     def visit_field(self, node):
-        base_ptr = getattr(node.decl, 'ptr', None)
-        if base_ptr is None:
-            base_ptr = self.current_fn_params[node.base_name]
+        if getattr(node, 'is_this_field', False):
+            base_ptr = self.current_this_ptr
+        else:
+            base_ptr = getattr(node.decl, 'ptr', None)
+            if base_ptr is None:
+                base_ptr = self.current_fn_params[node.base_name]
         ptr = self._gep_chain(base_ptr, node.field_indices)
         return self.builder.load(ptr)
 
@@ -307,4 +364,35 @@ class CodeGen:
             if node.widen_args[i]:
                 val = self.builder.sext(val, I64)
             arg_vals.append(val)
+
+        if getattr(node, 'is_this_call', False):
+            struct_name = node.fn_decl.struct_name
+            return self.builder.call(self.llvm_member_functions[(struct_name, node.func_name)], [self.current_this_ptr] + arg_vals)
+            
         return self.builder.call(self.llvm_functions[node.func_name], arg_vals)
+
+    def visit_member_call(self, node):
+        if isinstance(node.target, VarNode):
+            if getattr(node.target, 'is_this_field', False):
+                this_arg = self._gep_chain(self.current_this_ptr, [node.target.field_index])
+            else:
+                this_arg = getattr(node.target.decl, 'ptr', None)
+                if this_arg is None:
+                    this_arg = self.current_fn_params[node.target.name]
+        elif isinstance(node.target, FieldNode):
+            if getattr(node.target, 'is_this_field', False):
+                base_ptr = self.current_this_ptr
+            else:
+                base_ptr = getattr(node.target.decl, 'ptr', None)
+                if base_ptr is None:
+                    base_ptr = self.current_fn_params[node.target.base_name]
+            this_arg = self._gep_chain(base_ptr, node.target.field_indices)
+
+        arg_vals = []
+        for i, arg in enumerate(node.args):
+            val = arg.accept(self)
+            if node.widen_args[i]:
+                val = self.builder.sext(val, I64)
+            arg_vals.append(val)
+
+        return self.builder.call(self.llvm_member_functions[(node.struct_name, node.name)], [this_arg] + arg_vals)
