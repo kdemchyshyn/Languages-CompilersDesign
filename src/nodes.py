@@ -40,7 +40,7 @@ class FieldDeclNode(Node):
 
     def dump(self, indent=0):
         mut_str = "mut" if self.mutable else "const"
-        print("  " * indent + f"FieldDecl {self.name} {self.type_name} {mut_str}")
+        print("  " * indent + f"Member {self.name} {self.type_name} {mut_str}")
 
 
 class InitListNode(Node):
