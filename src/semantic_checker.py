@@ -596,3 +596,15 @@ class SemanticChecker:
                         return False
                     curr_type = f_info.type_name
             return True
+
+    def visit_read(self, node):
+        node.type = "i32"
+        return "i32"
+
+    def visit_print(self, node):
+        if node.is_string:
+            return None
+            
+        arg_type = node.arg.accept(self)
+        if arg_type not in ("i32", "i64", "bool") and arg_type not in self.structs:
+            self.error(node.arg, f"cannot print value of type {arg_type}")
