@@ -38,11 +38,37 @@ class CodeGen:
 
         self.struct_types = {}
         self.struct_field_types = {}
+        self.struct_field_names = {}
         self.llvm_functions = {}
         self.current_fn_params = {}
 
         self.llvm_member_functions = {}
         self.current_this_ptr = None
+
+        self.global_strs = {}
+        self.fmt_read = self._get_or_make_global_str(b"%d\0")
+        self.fmt_print_i32 = self._get_or_make_global_str(b"%d\n\0")
+        self.fmt_print_i64 = self._get_or_make_global_str(b"%lld\n\0")
+        self.fmt_print_str = self._get_or_make_global_str(b"%s\n\0")
+        
+        self.scanf = ir.Function(
+            self.module,
+            ir.FunctionType(I32, [I8_PTR], var_arg=True),
+            name="scanf",
+        )
+
+    def _get_or_make_global_str(self, text_bytes):
+        if text_bytes in self.global_strs:
+            return self.global_strs[text_bytes]
+            
+        name = f"str_const_{len(self.global_strs)}"
+        arr_ty = ir.ArrayType(I8, len(text_bytes))
+        gvar = ir.GlobalVariable(self.module, arr_ty, name=name)
+        gvar.linkage = "private"
+        gvar.global_constant = True
+        gvar.initializer = ir.Constant(arr_ty, bytearray(text_bytes))
+        self.global_strs[text_bytes] = gvar
+        return gvar
 
     def _make_global_str(self, name, data):
         arr_ty = ir.ArrayType(I8, len(data))
@@ -79,6 +105,7 @@ class CodeGen:
             llvm_st = self.module.context.get_identified_type(struct_decl.name)
             self.struct_types[struct_decl.name] = llvm_st
             self.struct_field_types[struct_decl.name] = [f.type_name for f in struct_decl.fields]
+            self.struct_field_names[struct_decl.name] = [f.name for f in struct_decl.fields]
 
         for struct_decl in node.structs:
             llvm_st = self.struct_types[struct_decl.name]
@@ -396,3 +423,88 @@ class CodeGen:
             arg_vals.append(val)
 
         return self.builder.call(self.llvm_member_functions[(node.struct_name, node.name)], [this_arg] + arg_vals)
+
+    def visit_read(self, node):
+        slot = self._alloca_in_entry(I32, "read")
+        fmt_ptr = self.builder.bitcast(self.fmt_read, I8_PTR)
+        self.builder.call(self.scanf, [fmt_ptr, slot])
+        return self.builder.load(slot, name="read.val")
+
+    def visit_print(self, node):
+        if node.is_string:
+            str_const = self._get_or_make_global_str(node.arg.text.encode() + b"\0")
+            fmt_ptr = self.builder.bitcast(self.fmt_print_str, I8_PTR)
+            str_ptr = self.builder.bitcast(str_const, I8_PTR)
+            self.builder.call(self.printf, [fmt_ptr, str_ptr])
+        elif node.arg.type == "i32":
+            val = node.arg.accept(self)
+            fmt_ptr = self.builder.bitcast(self.fmt_print_i32, I8_PTR)
+            self.builder.call(self.printf, [fmt_ptr, val])
+        elif node.arg.type == "i64":
+            val = node.arg.accept(self)
+            fmt_ptr = self.builder.bitcast(self.fmt_print_i64, I8_PTR)
+            self.builder.call(self.printf, [fmt_ptr, val])
+        elif node.arg.type == "bool":
+            val = node.arg.accept(self)
+            true_ptr = self.builder.bitcast(self.str_true, I8_PTR)
+            false_ptr = self.builder.bitcast(self.str_false, I8_PTR)
+            chosen = self.builder.select(val, true_ptr, false_ptr)
+            fmt_ptr = self.builder.bitcast(self.fmt_print_str, I8_PTR)
+            self.builder.call(self.printf, [fmt_ptr, chosen])
+        elif node.arg.type in self.struct_types:
+            struct_name = node.arg.type
+            if isinstance(node.arg, VarNode):
+                if getattr(node.arg, 'is_this_field', False):
+                    struct_ptr = self._gep_chain(self.current_this_ptr, [node.arg.field_index])
+                else:
+                    struct_ptr = getattr(node.arg.decl, 'ptr', None)
+                    if struct_ptr is None:
+                        struct_ptr = self.current_fn_params[node.arg.name]
+            elif isinstance(node.arg, FieldNode):
+                if getattr(node.arg, 'is_this_field', False):
+                    base_ptr = self.current_this_ptr
+                else:
+                    base_ptr = getattr(node.arg.decl, 'ptr', None)
+                    if base_ptr is None:
+                        base_ptr = self.current_fn_params[node.arg.base_name]
+                struct_ptr = self._gep_chain(base_ptr, node.arg.field_indices)
+            else:
+                val = node.arg.accept(self)
+                struct_ptr = self._alloca_in_entry(self.struct_types[struct_name], "print.tmp")
+                self.builder.store(val, struct_ptr)
+            
+            self._emit_print_struct(struct_name, struct_ptr, is_top_level=True)
+
+    def _emit_print_struct(self, struct_name, struct_ptr, is_top_level=True):
+        open_str = self._get_or_make_global_str(f"{struct_name}{{".encode() + b"\0")
+        open_ptr = self.builder.bitcast(open_str, I8_PTR)
+        self.builder.call(self.printf, [open_ptr])
+
+        field_types = self.struct_field_types[struct_name]
+        field_names = self.struct_field_names[struct_name]
+        
+        for i, (field_name, field_type) in enumerate(zip(field_names, field_types)):
+            prefix = f"{field_name}: " if i == 0 else f", {field_name}: "
+            field_ptr = self.builder.gep(struct_ptr, [ir.Constant(I32, 0), ir.Constant(I32, i)], inbounds=True)
+            
+            if field_type in self.struct_types:
+                prefix_str = self._get_or_make_global_str(prefix.encode() + b"\0")
+                self.builder.call(self.printf, [self.builder.bitcast(prefix_str, I8_PTR)])
+                self._emit_print_struct(field_type, field_ptr, is_top_level=False)
+            else:
+                field_val = self.builder.load(field_ptr)
+                if field_type == "i32":
+                    fmt = self._get_or_make_global_str((prefix + "%d").encode() + b"\0")
+                    self.builder.call(self.printf, [self.builder.bitcast(fmt, I8_PTR), field_val])
+                elif field_type == "i64":
+                    fmt = self._get_or_make_global_str((prefix + "%lld").encode() + b"\0")
+                    self.builder.call(self.printf, [self.builder.bitcast(fmt, I8_PTR), field_val])
+                elif field_type == "bool":
+                    fmt = self._get_or_make_global_str((prefix + "%s").encode() + b"\0")
+                    true_ptr = self.builder.bitcast(self.str_true, I8_PTR)
+                    false_ptr = self.builder.bitcast(self.str_false, I8_PTR)
+                    chosen = self.builder.select(field_val, true_ptr, false_ptr)
+                    self.builder.call(self.printf, [self.builder.bitcast(fmt, I8_PTR), chosen])
+                    
+        close_str = self._get_or_make_global_str(b"}\n\0" if is_top_level else b"}\0")
+        self.builder.call(self.printf, [self.builder.bitcast(close_str, I8_PTR)])
