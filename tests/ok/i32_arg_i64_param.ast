@@ -1,5 +1,5 @@
 Program
-  Function add_i64 i64
+  Function add_i64 -> i64
     Param a i64
     Param b i64
     Block
