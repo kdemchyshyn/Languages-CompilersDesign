@@ -50,8 +50,9 @@ class InitListNode(Node):
         self.type_name = None
 
     def dump(self, indent=0):
+        print("  " * indent + "InitList")
         for val in self.values:
-            val.dump(indent)
+            val.dump(indent + 1)
     
 
 class StructNode(Node):
