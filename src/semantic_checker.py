@@ -439,25 +439,32 @@ class SemanticChecker:
         return node.type
 
     def visit_field(self, node):
-        decl = self.lookup_local(node.base_name)
         node.field_indices = []
         
-        if decl is not None:
-            node.decl = decl
-            node.is_this_field = False
-            current_type = decl.type_name
-            
-        elif self.current_struct is not None and node.base_name in self.current_struct.fields:
-            node.is_this_field = True
-            node.this_decl = self.current_member_fn.node.this_decl
-            node.field_indices.append(self.current_struct.fields[node.base_name].index)
-            current_type = self.current_struct.fields[node.base_name].type_name
-            
-        elif node.base_name in self.structs:
-            self.error(node, f"'{node.base_name}' is a type, not a variable")
-            
+        if getattr(node, 'target', None) is not None:
+            current_type = node.target.accept(self)
+            if current_type not in self.structs:
+                raise CompileError(f"line {node.dot_line}:{node.dot_col}: cannot use '.' after a call that returns {current_type}")
+            node.is_rvalue = True
         else:
-            self.error(node, f"variable '{node.base_name}' is used before its declaration")
+            decl = self.lookup_local(node.base_name)
+            
+            if decl is not None:
+                node.decl = decl
+                node.is_this_field = False
+                current_type = decl.type_name
+                
+            elif self.current_struct is not None and node.base_name in self.current_struct.fields:
+                node.is_this_field = True
+                node.this_decl = self.current_member_fn.node.this_decl
+                node.field_indices.append(self.current_struct.fields[node.base_name].index)
+                current_type = self.current_struct.fields[node.base_name].type_name
+                
+            elif node.base_name in self.structs:
+                self.error(node, f"'{node.base_name}' is a type, not a variable")
+                
+            else:
+                self.error(node, f"variable '{node.base_name}' is used before its declaration")
 
         for f_name in node.fields:
             if current_type not in self.structs:
@@ -507,7 +514,7 @@ class SemanticChecker:
         target_type = node.target.accept(self)
         
         if target_type not in self.structs:
-            self.error(node, f"cannot call member function '{node.name}' on non-struct type {target_type}")
+            raise CompileError(f"line {node.dot_line}:{node.dot_col}: cannot call member function '{node.name}' on non-struct type {target_type}")
             
         struct_info = self.structs[target_type]
         if node.name not in struct_info.methods:
@@ -557,15 +564,33 @@ class SemanticChecker:
                 if isinstance(node.target, VarNode):
                     path_str = node.target.name
                 elif isinstance(node.target, FieldNode):
-                    path_str = node.target.base_name + '.' + '.'.join(node.target.fields)
+                    if getattr(node.target, 'is_rvalue', False):
+                        path_str = "call_result." + '.'.join(node.target.fields)
+                    else:
+                        path_str = node.target.base_name + '.' + '.'.join(node.target.fields)
                 else:
                     path_str = "expression"
                 self.error(node, f"cannot call mutating method '{node.name}' on const path '{path_str}'")
 
     def is_path_mutable(self, target):
-        from nodes import VarNode, FieldNode
+        from nodes import VarNode, FieldNode, CallNode, MemberCallNode
+
+        # A temporary root object (call result) is always mutable.
+        if isinstance(target, (CallNode, MemberCallNode)):
+            return True
+            
         if not isinstance(target, (VarNode, FieldNode)):
             return False
+            
+        if getattr(target, 'is_rvalue', False):
+            # For a FieldNode on a call result, we verify the intermediate fields are mut.
+            curr_type = target.target.type
+            for f_name in target.fields:
+                f_info = self.structs[curr_type].fields[f_name]
+                if not f_info.is_mut:
+                    return False
+                curr_type = f_info.type_name
+            return True
             
         if getattr(target, 'is_this_field', False):
             struct_name = target.this_decl.type_name

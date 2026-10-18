@@ -21,9 +21,10 @@ block      ::= "{" NL { statement } [ exit NL ] "}" NL      (not empty)
 if         ::= "if" expr NL block [ "else" NL block ]
 while      ::= "while" expr NL block
 
-field      ::= ident "." ident { "." ident }
+chain_base ::= ident | field | call | member_call
+field      ::= chain_base "." ident { "." ident }
 field_decl ::= type [ "mut" ] ident NL
-member_call::= ident { "." ident } "." ident "(" [ expr { "," expr } ] ")"
+member_call::= chain_base "." ident "(" [ expr { "," expr } ] ")"
 struct     ::= "struct" ident NL "{" NL field_decl { field_decl } { fn } "}" NL
 
 call       ::= ident "(" [ expr { "," expr } ] ")"

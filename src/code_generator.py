@@ -377,12 +377,22 @@ class CodeGen:
     def visit_field(self, node):
         if getattr(node, 'is_this_field', False):
             base_ptr = self.current_this_ptr
+            ptr = self._gep_chain(base_ptr, node.field_indices)
+            return self.builder.load(ptr)
+            
+        if getattr(node, 'target', None) is not None:
+            # Field of a call result!
+            agg_val = node.target.accept(self)
+            for idx in node.field_indices:
+                agg_val = self.builder.extract_value(agg_val, idx)
+            return agg_val
+            
         else:
             base_ptr = getattr(node.decl, 'ptr', None)
             if base_ptr is None:
                 base_ptr = self.current_fn_params[node.base_name]
-        ptr = self._gep_chain(base_ptr, node.field_indices)
-        return self.builder.load(ptr)
+            ptr = self._gep_chain(base_ptr, node.field_indices)
+            return self.builder.load(ptr)
 
     def visit_call(self, node):
         arg_vals = []
@@ -399,13 +409,28 @@ class CodeGen:
         return self.builder.call(self.llvm_functions[node.func_name], arg_vals)
 
     def visit_member_call(self, node):
-        if isinstance(node.target, VarNode):
+        from nodes import CallNode, MemberCallNode
+        
+        is_call_result = isinstance(node.target, (CallNode, MemberCallNode)) or \
+                         (isinstance(node.target, FieldNode) and getattr(node.target, 'target', None) is not None)
+                         
+        if is_call_result:
+            # Result of a call (or field on a call result). Evaluate to get the aggregate value.
+            val = node.target.accept(self)
+            
+            # Allocate a temporary slot and store the value, then pass the slot's address as 'this'
+            tmp_ptr = self._alloca_in_entry(self.struct_types[node.struct_name], "chain.tmp")
+            self.builder.store(val, tmp_ptr)
+            this_arg = tmp_ptr
+            
+        elif isinstance(node.target, VarNode):
             if getattr(node.target, 'is_this_field', False):
                 this_arg = self._gep_chain(self.current_this_ptr, [node.target.field_index])
             else:
                 this_arg = getattr(node.target.decl, 'ptr', None)
                 if this_arg is None:
                     this_arg = self.current_fn_params[node.target.name]
+                    
         elif isinstance(node.target, FieldNode):
             if getattr(node.target, 'is_this_field', False):
                 base_ptr = self.current_this_ptr
@@ -461,13 +486,18 @@ class CodeGen:
                     if struct_ptr is None:
                         struct_ptr = self.current_fn_params[node.arg.name]
             elif isinstance(node.arg, FieldNode):
-                if getattr(node.arg, 'is_this_field', False):
-                    base_ptr = self.current_this_ptr
+                if getattr(node.arg, 'target', None) is not None:
+                    val = node.arg.accept(self)
+                    struct_ptr = self._alloca_in_entry(self.struct_types[struct_name], "print.tmp")
+                    self.builder.store(val, struct_ptr)
                 else:
-                    base_ptr = getattr(node.arg.decl, 'ptr', None)
-                    if base_ptr is None:
-                        base_ptr = self.current_fn_params[node.arg.base_name]
-                struct_ptr = self._gep_chain(base_ptr, node.arg.field_indices)
+                    if getattr(node.arg, 'is_this_field', False):
+                        base_ptr = self.current_this_ptr
+                    else:
+                        base_ptr = getattr(node.arg.decl, 'ptr', None)
+                        if base_ptr is None:
+                            base_ptr = self.current_fn_params[node.arg.base_name]
+                    struct_ptr = self._gep_chain(base_ptr, node.arg.field_indices)
             else:
                 val = node.arg.accept(self)
                 struct_ptr = self._alloca_in_entry(self.struct_types[struct_name], "print.tmp")

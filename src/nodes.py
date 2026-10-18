@@ -50,9 +50,8 @@ class InitListNode(Node):
         self.type_name = None
 
     def dump(self, indent=0):
-        print("  " * indent + "InitList")
         for val in self.values:
-            val.dump(indent + 1)
+            val.dump(indent)
     
 
 class StructNode(Node):
@@ -227,16 +226,25 @@ class ExprNode(Node):
         self.type = None
 
 class FieldNode(ExprNode):
-    def __init__(self, line, col, base_name, fields):
+    def __init__(self, line, col, base_name, fields, dot_line, dot_col, target=None):
         super().__init__(line, col)
         self.base_name = base_name
         self.fields = fields
+        self.dot_line = dot_line
+        self.dot_col = dot_col
+        self.target = target
         self.decl = None
         self.field_indices = []
 
     def dump(self, indent=0):
-        path = ".".join([self.base_name] + self.fields)
-        print("  " * indent + f"Field {path}")
+        if self.base_name is not None:
+            path = ".".join([self.base_name] + self.fields)
+            print("  " * indent + f"Field {path}")
+        else:
+            path = ".".join(self.fields)
+            print("  " * indent + f"Field {path}")
+            if self.target is not None:
+                self.target.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_field(self)
@@ -260,9 +268,11 @@ class CallNode(ExprNode):
 
 
 class MemberCallNode(ExprNode):
-    def __init__(self, line, col, name, target, args):
+    def __init__(self, line, col, name, target, args, dot_line=None, dot_col=None):
         super().__init__(line, col)
         self.name = name
+        self.dot_line = dot_line
+        self.dot_col = dot_col
         self.target = target #VarNode or FieldNode
         self.args = args
         self.fn_decl = None
