@@ -10,7 +10,8 @@ from nodes import (
     NotNode, 
     BlockNode, 
     IfNode, WhileNode,
-    InitListNode
+    InitListNode,
+    ReadNode, StringNode, PrintNode
 )
 
 class Parser:
@@ -65,6 +66,9 @@ class Parser:
     
     def expect(self, kind, what):
         tok = self.peek()
+        if tok is not None and tok.kind == "keyword" and tok.text in ("read", "print") and kind == "ident":
+            self.error(f"'{tok.text}' is a built-in and cannot be used as a name")
+            
         if tok is None or tok.kind != kind: self.error(f"expected {what}")
         return self.eat()
 
@@ -277,8 +281,17 @@ class Parser:
 
         if tok.kind == "keyword" and tok.text in ("struct", "fn"):
             self.error("function/struct declaration is not allowed after statements or inside a block")
-        
-        if (tok.kind == "keyword" and tok.text in self.TYPES) or tok.kind == "ident":
+
+        if tok.kind == "keyword" and tok.text == "print":
+            node = self.parse_print()
+            self.expect_end_of_line("the statement")
+            self.next_line()
+            return node
+        elif tok.kind == "keyword" and tok.text == "read":
+            self.error("A call alone is not a statement")
+        elif tok.kind == "string":
+            self.error("string literal is only allowed inside print")
+        elif (tok.kind == "keyword" and tok.text in self.TYPES) or tok.kind == "ident":
             is_decl = False
             if tok.kind == "keyword" and tok.text in self.TYPES:
                 is_decl = True
@@ -314,6 +327,27 @@ class Parser:
             self.error("'else' without an 'if'")
         else:
             self.error(f"cannot start a statement with '{tok.text}'")
+
+    def parse_print(self):
+        tok_print = self.eat() # Eat "print"
+        self.expect("lparen", "'('")
+        
+        if self.peek() is not None and self.peek().kind == "rparen":
+            self.error("print() requires an argument")
+            
+        if self.peek() is not None and self.peek().kind == "string":
+            str_tok = self.eat()
+            arg = StringNode(str_tok.line, str_tok.col, str_tok.text)
+            is_string = True
+        else:
+            arg = self.parse_expr()
+            is_string = False
+            
+        if self.peek() is not None and self.peek().kind == "coma":
+            self.error("print takes exactly 1 argument")
+            
+        self.expect("rparen", "')'")
+        return PrintNode(tok_print.line, tok_print.col, arg, is_string)
 
     def parse_if(self):
         tok_if = self.eat() # Eat "if"
@@ -487,6 +521,17 @@ class Parser:
         if tok.kind == "operation" and tok.text == "!":
             self.eat()
             return NotNode(tok.line, tok.col, self.parse_factor())
+        elif tok.kind == "keyword" and tok.text == "read":
+            tok_read = self.eat()
+            self.expect("lparen", "'('")
+            if self.peek() is None or self.peek().kind != "rparen":
+                self.error("'read' takes no arguments")
+            self.eat() # eat ')'
+            return ReadNode(tok_read.line, tok_read.col)
+        elif tok.kind == "keyword" and tok.text == "print":
+            self.error("'print' has no value and cannot be used in an expression")
+        elif tok.kind == "string":
+            self.error("string literal is only allowed inside print")
         elif tok.kind == "number":
             self.eat()
             return ConstNode(tok.line, tok.col, int(tok.text))

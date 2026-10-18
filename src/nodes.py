@@ -119,6 +119,15 @@ class MemberFnNode(Node):
     def accept(self, visitor):
         return visitor.visit_member_fn(self)
 
+class StringNode(Node):
+    def __init__(self, line, col, text):
+        super().__init__(line, col)
+        self.text = text
+
+    def dump(self, indent=0):
+        print("  " * indent + f'String "{self.text}"')
+
+
 class StmtNode(Node): pass
 
 class DeclNode(StmtNode):
@@ -197,6 +206,21 @@ class WhileNode(StmtNode):
     def accept(self, visitor):
         return visitor.visit_while(self)
 
+
+class PrintNode(StmtNode):
+    def __init__(self, line, col, arg, is_string=False):
+        super().__init__(line, col)
+        self.arg = arg
+        self.is_string = is_string
+
+    def dump(self, indent=0):
+        print("  " * indent + "Print")
+        self.arg.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_print(self)
+
+
 class ExprNode(Node):
     def __init__(self, line, col):
         super().__init__(line, col)
@@ -253,6 +277,17 @@ class MemberCallNode(ExprNode):
 
     def accept(self, visitor):
         return visitor.visit_member_call(self)
+
+
+class ReadNode(ExprNode):
+    def __init__(self, line, col):
+        super().__init__(line, col)
+
+    def dump(self, indent=0):
+        print("  " * indent + "Read")
+
+    def accept(self, visitor):
+        return visitor.visit_read(self)
 
 
 class BinOpNode(ExprNode):
