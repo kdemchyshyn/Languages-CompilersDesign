@@ -1,0 +1,12 @@
+struct Sensor
+{
+    i32 reading
+    fn get_reading := () -> i32
+    {
+        exit reading
+    }
+}
+
+Sensor s{99}
+i32 bad{s.get_reading().x}
+exit bad

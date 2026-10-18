@@ -1,0 +1,27 @@
+Program
+  Struct Acc
+    Member n i32 mut
+    MemberFn double -> i32
+      Block
+        Decl res i32 const
+          InitList
+            BinOp *
+              Var n
+              Const 2
+        Exit
+          Var res
+    MemberFn quadruple -> i32
+      Block
+        Decl res i32 const
+          InitList
+            BinOp *
+              Call double
+              Const 2
+        Exit
+          Var res
+  Decl a Acc const
+    InitList
+      Const 7
+  Exit
+    MemberCall quadruple
+      Var a

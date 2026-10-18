@@ -1,0 +1,20 @@
+Program
+  Struct Box
+    Member value i32 mut
+    MemberFn set -> i32
+      Param v i32
+      Block
+        Assign value
+          Var v
+        Exit
+          Var value
+  Decl b Box mut
+    InitList
+      Const 10
+  Decl tmp i32 const
+    InitList
+      MemberCall set
+        Var b
+        Const 42
+  Exit
+    Field b.value

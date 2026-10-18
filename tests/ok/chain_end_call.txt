@@ -1,0 +1,19 @@
+struct Point
+{
+    i32 x
+    i32 y
+    fn dist2 := () -> i32
+    {
+        i32 res {x * x + y * y}
+        exit res
+    }
+}
+
+struct Circle
+{
+    Point center
+    i32 radius
+}
+
+Circle c{{3, 4}, 5}
+exit c.center.dist2()

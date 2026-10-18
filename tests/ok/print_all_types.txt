@@ -1,0 +1,8 @@
+i32 a{7}
+i64 b{100}
+bool c{true}
+print("hello")
+print(a)
+print(b)
+print(c)
+exit 0

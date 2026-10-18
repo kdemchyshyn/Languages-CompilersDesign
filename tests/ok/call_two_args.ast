@@ -1,0 +1,27 @@
+Program
+  Struct Point
+    Member x i32 mut
+    Member y i32 mut
+    MemberFn translate -> i32
+      Param dx i32
+      Param dy i32
+      Block
+        Assign x
+          BinOp +
+            Var x
+            Var dx
+        Assign y
+          BinOp +
+            Var y
+            Var dy
+        Exit
+          Var x
+  Decl p Point mut
+    InitList
+      Const 3
+      Const 7
+  Exit
+    MemberCall translate
+      Var p
+      Const 2
+      Const 5

@@ -1,0 +1,20 @@
+Program
+  Decl a i32 const
+    InitList
+      Const 7
+  Decl b i64 const
+    InitList
+      Const 100
+  Decl c bool const
+    InitList
+      Bool true
+  Print
+    String "hello"
+  Print
+    Var a
+  Print
+    Var b
+  Print
+    Var c
+  Exit
+    Const 0

@@ -1,0 +1,13 @@
+struct Counter
+{
+    i32 mut value
+    fn increment := () -> i32
+    {
+        value := value + 1
+        exit value
+    }
+}
+
+Counter c{0}
+i32 res{c.increment()}
+exit res

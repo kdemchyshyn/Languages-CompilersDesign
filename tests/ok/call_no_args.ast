@@ -1,0 +1,13 @@
+Program
+  Struct Counter
+    Member value i32 mut
+    MemberFn get -> i32
+      Block
+        Exit
+          Var value
+  Decl c Counter mut
+    InitList
+      Const 0
+  Exit
+    MemberCall get
+      Var c

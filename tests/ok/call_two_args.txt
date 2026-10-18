@@ -1,0 +1,14 @@
+struct Point
+{
+    i32 mut x
+    i32 mut y
+    fn translate := (i32 dx, i32 dy) -> i32
+    {
+        x := x + dx
+        y := y + dy
+        exit x
+    }
+}
+
+Point mut p{3, 7}
+exit p.translate(2, 5)

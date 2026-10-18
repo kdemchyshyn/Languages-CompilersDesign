@@ -1,0 +1,29 @@
+Program
+  Struct Point
+    Member x i32 const
+    Member y i32 const
+    MemberFn dist2 -> i32
+      Block
+        Decl res i32 const
+          InitList
+            BinOp +
+              BinOp *
+                Var x
+                Var x
+              BinOp *
+                Var y
+                Var y
+        Exit
+          Var res
+  Struct Circle
+    Member center Point const
+    Member radius i32 const
+  Decl c Circle const
+    InitList
+      InitList
+        Const 3
+        Const 4
+      Const 5
+  Exit
+    MemberCall dist2
+      Field c.center

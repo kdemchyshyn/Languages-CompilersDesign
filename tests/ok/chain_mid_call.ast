@@ -1,0 +1,27 @@
+Program
+  Struct Circle
+    Member radius i32 const
+    Member x i32 const
+    MemberFn bigger -> Circle
+      Param dr i32
+      Block
+        Decl res Circle const
+          InitList
+            BinOp +
+              Var radius
+              Var dr
+            Var x
+        Exit
+          Var res
+  Decl c Circle const
+    InitList
+      Const 5
+      Const 10
+  Decl r i32 const
+    InitList
+      Field radius
+        MemberCall bigger
+          Var c
+          Const 3
+  Exit
+    Var r

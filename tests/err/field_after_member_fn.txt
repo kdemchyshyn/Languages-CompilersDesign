@@ -1,0 +1,14 @@
+struct Point
+{
+    i32 x
+    
+    fn sum := () -> i32
+    {
+        i32 res{x + y}
+        exit res
+    }
+
+    i32 y
+}
+Point p{3, 4}
+exit p.sum()

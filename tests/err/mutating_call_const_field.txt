@@ -1,0 +1,19 @@
+struct Inner
+{
+    i32 mut x
+    fn bump := () -> i32
+    {
+        x := x + 1
+        exit x
+    }
+}
+
+struct Outer
+{
+    Inner center
+    i32 mut size
+}
+
+Outer mut o{{0}, 10}
+i32 res{o.center.bump()}
+exit res

@@ -1,0 +1,14 @@
+struct Circle
+{
+    i32 radius
+    i32 x
+    fn bigger := (i32 dr) -> Circle
+    {
+        Circle res{radius + dr, x}
+        exit res
+    }
+}
+
+Circle c{5, 10}
+i32 r{c.bigger(3).radius}
+exit r

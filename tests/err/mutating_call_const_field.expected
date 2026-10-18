@@ -1,0 +1,1 @@
+compilation error: line 18:9: cannot call mutating method 'bump' on const path 'o.center'
