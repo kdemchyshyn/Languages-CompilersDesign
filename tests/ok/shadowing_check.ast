@@ -1,15 +1,13 @@
 Program
   Decl x i32 const
-    InitList
-      Const 7
+    Const 7
   If
     BinOp ==
       Var x
       Const 7
     Block
       Decl x bool const
-        InitList
-          Bool true
+        Bool true
       Exit
         Var x
   Exit

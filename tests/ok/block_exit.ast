@@ -1,13 +1,11 @@
 Program
   Decl x i32 const
-    InitList
-      Const 10
+    Const 10
   If
     Bool true
     Block
       Decl res bool const
-        InitList
-          Bool true
+        Bool true
       Exit
         Var res
   Exit

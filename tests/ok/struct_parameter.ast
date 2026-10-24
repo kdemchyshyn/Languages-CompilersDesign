@@ -6,16 +6,14 @@ Program
     Param p Point
     Block
       Decl res i32 const
-        InitList
-          BinOp +
-            Field p.x
-            Field p.y
+        BinOp +
+          Field p.x
+          Field p.y
       Exit
         Var res
   Decl pt Point const
-    InitList
-      Const 15
-      Const 25
+    Const 15
+    Const 25
   Exit
     Call sum_coords
       Var pt

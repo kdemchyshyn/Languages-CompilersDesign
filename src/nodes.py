@@ -111,7 +111,8 @@ class DeclNode(StmtNode):
     def dump(self, indent=0):
         mut_str = "mut" if self.mutable else "const"
         print("  " * indent + f"Decl {self.name} {self.type_name} {mut_str}")
-        self.init.dump(indent + 1)
+        for value in self.init.values:
+            value.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_decl(self)

@@ -1,10 +1,8 @@
 Program
   Decl i i32 mut
-    InitList
-      Const 1
+    Const 1
   Decl sum i32 mut
-    InitList
-      Const 0
+    Const 0
   While
     BinOp !=
       Var i
