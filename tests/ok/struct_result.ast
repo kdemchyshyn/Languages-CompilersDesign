@@ -7,20 +7,17 @@ Program
     Param y i32
     Block
       Decl p Point const
-        InitList
-          Var x
-          Var y
+        Var x
+        Var y
       Exit
         Var p
   Decl pt Point const
-    InitList
-      Call make_point
-        Const 35
-        Const 45
+    Call make_point
+      Const 35
+      Const 45
   Decl res i32 const
-    InitList
-      BinOp +
-        Field pt.x
-        Field pt.y
+    BinOp +
+      Field pt.x
+      Field pt.y
   Exit
     Var res

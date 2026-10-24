@@ -11,14 +11,13 @@ Program
   Decl r Ring const
     InitList
       InitList
-        InitList
-          Const 10
-          Const 20
-        Const 5
+        Const 10
+        Const 20
+      Const 5
+    InitList
       InitList
-        InitList
-          Const 30
-          Const 40
-        Const 15
+        Const 30
+        Const 40
+      Const 15
   Exit
     Field r.inner.center.x

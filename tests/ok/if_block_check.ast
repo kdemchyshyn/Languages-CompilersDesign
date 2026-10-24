@@ -1,10 +1,8 @@
 Program
   Decl r i32 mut
-    InitList
-      Const 0
+    Const 0
   Decl n i64 const
-    InitList
-      Const 3
+    Const 3
   If
     BinOp ==
       Var n

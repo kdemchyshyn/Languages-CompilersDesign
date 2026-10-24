@@ -1,7 +1,6 @@
 Program
   Decl x i32 mut
-    InitList
-      Const 30
+    Const 30
   If
     Bool true
     Block
