@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COMPILER="python3 compiler.py"
+COMPILER="python3 src/compiler.py"
 PASS_DIR="tests/ok"
 FAIL_DIR="tests/err"
 OUTPUT_LL="test_output.ll"

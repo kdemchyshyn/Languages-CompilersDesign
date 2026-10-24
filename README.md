@@ -4,13 +4,13 @@
 source ~/lcd/bin/activate
 
 ### Compile a source file to LLVM IR
-python3 compiler.py input.txt output.ll
+python3 src/compiler.py input.txt output.ll
 
 ### Print lexer tokens
-python3 compiler.py --tokens input.txt
+python3 src/compiler.py --tokens input.txt
 
 ### Print AST
-python3 compiler.py --ast input.txt
+python3 src/compiler.py --ast input.txt
 
 ### Execute the generated LLVM IR
 llc -filetype=obj -relocation-model=pic output.ll -o output.o<br>

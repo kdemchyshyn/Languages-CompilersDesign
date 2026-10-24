@@ -1,0 +1,19 @@
+Program
+  Function add_i64 i64
+    Param a i64
+    Param b i64
+    Block
+      Decl res i64 const
+        BinOp +
+          Var a
+          Var b
+      Exit
+        Var res
+  Decl x i32 const
+    Const 25
+  Decl res i64 const
+    Call add_i64
+      Var x
+      Const 15
+  Exit
+    Var res

@@ -1,0 +1,17 @@
+struct Point
+{
+    i32 x
+    i32 y
+}
+struct Circle
+{
+    Point center
+    i32 radius
+}
+struct Ring
+{
+    Circle inner
+    Circle outer
+}
+Ring r{{{10, 20}, 5}, {{30, 40}, 15}}
+exit r.inner.center.x
