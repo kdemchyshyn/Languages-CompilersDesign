@@ -1,8 +1,8 @@
 Program
   Struct Point
-    FieldDecl x i32 const
-    FieldDecl y i32 const
-  Function sum_coords i32
+    Member x i32 const
+    Member y i32 const
+  Function sum_coords -> i32
     Param p Point
     Block
       Decl res i32 const

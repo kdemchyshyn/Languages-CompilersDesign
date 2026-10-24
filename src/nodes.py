@@ -40,7 +40,7 @@ class FieldDeclNode(Node):
 
     def dump(self, indent=0):
         mut_str = "mut" if self.mutable else "const"
-        print("  " * indent + f"FieldDecl {self.name} {self.type_name} {mut_str}")
+        print("  " * indent + f"Member {self.name} {self.type_name} {mut_str}")
 
 
 class InitListNode(Node):
@@ -56,15 +56,19 @@ class InitListNode(Node):
     
 
 class StructNode(Node):
-    def __init__(self, line, col, name, fields):
+    def __init__(self, line, col, name, fields, methods=None):
         super().__init__(line, col)
         self.name = name
         self.fields = fields
+        self.methods = methods
 
     def dump(self, indent=0):
         print("  " * indent + f"Struct {self.name}")
         for field in self.fields:
             field.dump(indent + 1)
+        if self.methods:
+            for method in self.methods:
+                method.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_struct(self)
@@ -89,13 +93,39 @@ class FunctionNode(Node):
         self.body = body
 
     def dump(self, indent=0):
-        print("  " * indent + f"Function {self.name} {self.return_type}")
+        print("  " * indent + f"Function {self.name} -> {self.return_type}")
         for param in self.params:
             param.dump(indent + 1)
         self.body.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_function(self)
+
+
+class MemberFnNode(Node):
+    def __init__(self, line, col, name, return_type, params, body):
+        super().__init__(line, col)
+        self.name = name
+        self.return_type = return_type
+        self.params = params
+        self.body = body
+
+    def dump(self, indent=0):
+        print("  " * indent + f"MemberFn {self.name} -> {self.return_type}")
+        for param in self.params:
+            param.dump(indent + 1)
+        self.body.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_member_fn(self)
+
+class StringNode(Node):
+    def __init__(self, line, col, text):
+        super().__init__(line, col)
+        self.text = text
+
+    def dump(self, indent=0):
+        print("  " * indent + f'String "{self.text}"')
 
 
 class StmtNode(Node): pass
@@ -177,22 +207,46 @@ class WhileNode(StmtNode):
     def accept(self, visitor):
         return visitor.visit_while(self)
 
+
+class PrintNode(StmtNode):
+    def __init__(self, line, col, arg, is_string=False):
+        super().__init__(line, col)
+        self.arg = arg
+        self.is_string = is_string
+
+    def dump(self, indent=0):
+        print("  " * indent + "Print")
+        self.arg.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_print(self)
+
+
 class ExprNode(Node):
     def __init__(self, line, col):
         super().__init__(line, col)
         self.type = None
 
 class FieldNode(ExprNode):
-    def __init__(self, line, col, base_name, fields):
+    def __init__(self, line, col, base_name, fields, dot_line, dot_col, target=None):
         super().__init__(line, col)
         self.base_name = base_name
         self.fields = fields
+        self.dot_line = dot_line
+        self.dot_col = dot_col
+        self.target = target
         self.decl = None
         self.field_indices = []
 
     def dump(self, indent=0):
-        path = ".".join([self.base_name] + self.fields)
-        print("  " * indent + f"Field {path}")
+        if self.base_name is not None:
+            path = ".".join([self.base_name] + self.fields)
+            print("  " * indent + f"Field {path}")
+        else:
+            path = ".".join(self.fields)
+            print("  " * indent + f"Field {path}")
+            if self.target is not None:
+                self.target.dump(indent + 1)
 
     def accept(self, visitor):
         return visitor.visit_field(self)
@@ -213,6 +267,40 @@ class CallNode(ExprNode):
 
     def accept(self, visitor):
         return visitor.visit_call(self)
+
+
+class MemberCallNode(ExprNode):
+    def __init__(self, line, col, name, target, args, dot_line=None, dot_col=None):
+        super().__init__(line, col)
+        self.name = name
+        self.dot_line = dot_line
+        self.dot_col = dot_col
+        self.target = target #VarNode or FieldNode
+        self.args = args
+        self.fn_decl = None
+        self.widen_args = []
+        self.struct_name = None
+
+    def dump(self, indent=0):
+        print("  " * indent + f"MemberCall {self.name}")
+        self.target.dump(indent + 1)
+        for arg in self.args:
+            arg.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_member_call(self)
+
+
+class ReadNode(ExprNode):
+    def __init__(self, line, col):
+        super().__init__(line, col)
+
+    def dump(self, indent=0):
+        print("  " * indent + "Read")
+
+    def accept(self, visitor):
+        return visitor.visit_read(self)
+
 
 class BinOpNode(ExprNode):
     def __init__(self, line, col, op, left, right):

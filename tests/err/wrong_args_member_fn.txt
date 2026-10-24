@@ -1,0 +1,11 @@
+struct Box
+{
+    i32 x
+    fn scale := (i32 factor) -> i32
+    {
+        i32 res {x * factor}
+        exit res
+    }
+}
+Box b{5}
+exit b.scale(2, 3)

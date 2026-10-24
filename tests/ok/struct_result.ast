@@ -1,8 +1,8 @@
 Program
   Struct Point
-    FieldDecl x i32 const
-    FieldDecl y i32 const
-  Function make_point Point
+    Member x i32 const
+    Member y i32 const
+  Function make_point -> Point
     Param x i32
     Param y i32
     Block

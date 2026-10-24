@@ -37,7 +37,12 @@ for test_file in "$PASS_DIR"/*.txt; do
         fi
 
         if command -v lli >/dev/null 2>&1; then
-            ACTUAL_OUTPUT=$(lli "$OUTPUT_LL")
+            in_file="${test_file%.txt}.in"
+            if [ -f "$in_file" ]; then
+                ACTUAL_OUTPUT=$(lli "$OUTPUT_LL" < "$in_file")
+            else
+                ACTUAL_OUTPUT=$(lli "$OUTPUT_LL")
+            fi
             
             if [ -f "$expected_file" ]; then
                 EXPECTED_OUTPUT=$(cat "$expected_file")

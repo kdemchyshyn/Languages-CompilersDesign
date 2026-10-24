@@ -1,5 +1,5 @@
 Program
-  Function add i32
+  Function add -> i32
     Param a i32
     Param b i32
     Block
@@ -9,7 +9,7 @@ Program
           Var b
       Exit
         Var res
-  Function double i32
+  Function double -> i32
     Param x i32
     Block
       Decl res i32 const

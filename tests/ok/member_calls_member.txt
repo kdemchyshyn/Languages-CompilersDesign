@@ -1,0 +1,17 @@
+struct Acc
+{
+    i32 mut n
+    fn double := () -> i32
+    {
+        i32 res {n * 2}
+        exit res
+    }
+    fn quadruple := () -> i32
+    {
+        i32 res {double() * 2}
+        exit res
+    }
+}
+
+Acc a{7}
+exit a.quadruple()

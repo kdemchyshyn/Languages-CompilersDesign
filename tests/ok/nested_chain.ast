@@ -1,13 +1,13 @@
 Program
   Struct Point
-    FieldDecl x i32 const
-    FieldDecl y i32 const
+    Member x i32 const
+    Member y i32 const
   Struct Circle
-    FieldDecl center Point const
-    FieldDecl radius i32 const
+    Member center Point const
+    Member radius i32 const
   Struct Ring
-    FieldDecl inner Circle const
-    FieldDecl outer Circle const
+    Member inner Circle const
+    Member outer Circle const
   Decl r Ring const
     InitList
       InitList

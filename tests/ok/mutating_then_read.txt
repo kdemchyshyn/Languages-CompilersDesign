@@ -1,0 +1,13 @@
+struct Box
+{
+    i32 mut value
+    fn set := (i32 v) -> i32
+    {
+        value := v
+        exit value
+    }
+}
+
+Box mut b{10}
+i32 tmp{b.set(42)}
+exit b.value

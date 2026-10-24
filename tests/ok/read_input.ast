@@ -1,0 +1,5 @@
+Program
+  Decl n i32 const
+    Read
+  Exit
+    Var n
