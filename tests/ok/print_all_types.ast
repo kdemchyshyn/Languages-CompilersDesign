@@ -1,13 +1,10 @@
 Program
   Decl a i32 const
-    InitList
-      Const 7
+    Const 7
   Decl b i64 const
-    InitList
-      Const 100
+    Const 100
   Decl c bool const
-    InitList
-      Bool true
+    Bool true
   Print
     String "hello"
   Print

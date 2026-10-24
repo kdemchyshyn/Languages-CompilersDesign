@@ -9,12 +9,10 @@ Program
         Exit
           Var value
   Decl b Box mut
-    InitList
-      Const 10
+    Const 10
   Decl tmp i32 const
-    InitList
-      MemberCall set
-        Var b
-        Const 42
+    MemberCall set
+      Var b
+      Const 42
   Exit
     Field b.value

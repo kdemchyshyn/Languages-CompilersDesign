@@ -17,9 +17,8 @@ Program
         Exit
           Var x
   Decl p Point mut
-    InitList
-      Const 3
-      Const 7
+    Const 3
+    Const 7
   Exit
     MemberCall translate
       Var p

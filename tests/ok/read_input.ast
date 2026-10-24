@@ -1,6 +1,5 @@
 Program
   Decl n i32 const
-    InitList
-      Read
+    Read
   Exit
     Var n
