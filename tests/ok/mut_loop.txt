@@ -1,0 +1,12 @@
+i32 mut i{0}
+while i != 3
+{
+    fn next := [mut i]() -> i32
+    {
+        i := i + 1
+        exit i
+    }
+    print(next())
+    i := i + 1
+}
+exit i

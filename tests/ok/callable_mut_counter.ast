@@ -1,0 +1,33 @@
+Program
+  Struct Counter
+    Member n i32 mut
+    MemberFn call -> i32
+      Block
+        Assign n
+          BinOp +
+            Var n
+            Const 1
+        Exit
+          Var n
+  Decl c Counter mut
+    Const 0
+  Decl a i32 const
+    Call c
+  Decl b i32 const
+    Call c
+  Decl d i32 const
+    Call c
+  Print
+    Var c
+  Decl result i32 const
+    BinOp +
+      BinOp +
+        BinOp *
+          Var a
+          Const 100
+        BinOp *
+          Var b
+          Const 10
+      Var d
+  Exit
+    Var result

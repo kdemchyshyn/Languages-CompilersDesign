@@ -1,0 +1,18 @@
+Program
+  Decl x i32 const
+    Const 7
+  Lambda increment -> i32
+    Capture mut x
+    Block
+      Assign x
+        BinOp +
+          Var x
+          Const 1
+      Exit
+        Var x
+  Print
+    Call increment
+  Print
+    Var x
+  Exit
+    Var x

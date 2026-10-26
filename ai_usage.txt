@@ -658,3 +658,93 @@ Open questions: none.
 Kept as-is: ai_usage
 Changed by the student: None
 Removed/rejected by the student: None
+
+
+## J5 — Add Practice 8 tests (2026-10-26)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB J5. Allowed: NEW files in tests/ok and tests/err, plus ai_usage.txt. No source changes, existing-test edits, or Git commands.
+
+Create each NAME.txt + NAME.expected pair; create NAME.ast for 2-3 positive programs only after manually validating parse AST.
+
+Derive outputs/line:col BY HAND before running compiler.
+
+.expected for successful programs contains stdout plus "Program exit with result N"; for error programs, one exact line "compilation error: line L:C: <message>".
+
+Sheet-derived programs have four-space body indents and no blank lines.
+
+Positive tests (19):
+
+Task 1 (5):
+- callable_both_ways (sheet)
+- callable_field (s.scale(7), scale(side) within a member function)
+- callable_mut_counter (three c() calls then print)
+- callable_in_expr (arithmetic, exit result, global-function arg)
+- callable_i64_param (i32->i64 widening)
+
+Task 2 (9):
+- lambda_sheet
+- lambda_no_capture_global_call
+- lambda_capture_changed_after
+- lambda_in_function_param
+- lambda_in_while
+- lambda_in_if_block
+- lambda_captures_lambda
+- lambda_in_member_fn
+- lambda_struct_capture
+
+Mut (5):
+- mut_counter (sheet)
+- mut_loop
+- mut_two_copies
+- mut_const_and_mut
+- mut_capture_const_var
+
+Negative tests (22):
+
+Task 1 (7):
+- callable_no_call
+- callable_on_i32
+- callable_var_and_fn
+- callable_const_obj
+- callable_const_field
+- callable_wrong_args
+- callable_wrong_type
+
+Task 2 (13):
+- lambda_missing_capture (19:11)
+- lambda_assign_capture (19:5)
+- lambda_dup_capture (17:17)
+- lambda_unknown_capture (8:26)
+- lambda_passed_arg (13:14)
+- lambda_exit_value
+- lambda_print
+- lambda_assign
+- lambda_calls_itself
+- lambda_param_like_capture
+- lambda_capture_field_access (add_k.k)
+- lambda_no_bracket_in_block
+- capture_list_on_member_fn
+
+Mut (2):
+- mut_capture_const_call (11:11)
+- mut_assign_const_capture
+
+Run tests, report totals and any failing case with concise reason.
+
+If compiler result disagrees with independently calculated expected output, DO NOT change expected to match; report minimal reproduction and stop affected tests.
+
+Do not modify existing tests or source code.
+
+Append J5 ai_usage entry and summarize. No Git actions.
+Files changed: Added `NAME.txt` and `NAME.expected` for all 19 positive programs and 22 negative programs under tests/ok and tests/err; added `callable_both_ways.ast`, `lambda_no_capture_global_call.ast`, and `mut_counter.ast`; appended this entry to ai_usage.txt. The four positive inputs callable_in_expr, callable_mut_counter, mut_const_and_mut, and mut_two_copies use local result declarations because exit does not accept arithmetic expressions directly.
+What I did: Added the requested test fixtures. Manually inspected the three selected `--ast` outputs before recording their `.ast` files. Kept every `.expected` value as initially written after finding discrepancies; did not change source files or existing tests.
+Kept from existing code (deliberately untouched): All source files and pre-existing tests.
+Considered but NOT done / rejected (with reason): Did not change expected files to match compiler observations, as instructed. Did not add AST snapshots for more than three positive tests.
+Needed elsewhere: none.
+Verification: Latest recorded pre-J5 baseline from J4: `source ~/lcd/bin/activate; ./test.sh` -> 82 passed, 0 failed, exit 0 (not rerun immediately before adding J5 fixtures). J5 full suite: `set -o pipefail; source ~/lcd/bin/activate; ./test.sh > /tmp/practice8-j5-verified-tests.log 2>&1; rc=$?; tail -n 4 /tmp/practice8-j5-verified-tests.log; rg -n -C 1 '\\[FAIL\\]' /tmp/practice8-j5-verified-tests.log; exit "$rc"` -> 117 passed, 6 failed, exit 1. `callable_in_expr` expected 80 but computes and prints 76 (a(4)=14, a(2)=12, twice(a(1))=22; total 54+22). Five negative expected positions differ from hand-counted source lines and compiler diagnostics: callable_const_field expected 14:8, got 15:8; callable_wrong_args expected 9:6, got 10:6; callable_wrong_type expected 9:8, got 10:8; lambda_exit_value expected 6:6, got 5:6; lambda_print expected 6:7, got 5:7. These expected files remain unchanged. The other 35 J5 fixtures passed.
+Open questions: none.
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: Ok and err tests
+Changed by the student: Added .ast files, and some expected
+Removed/rejected by the student: None

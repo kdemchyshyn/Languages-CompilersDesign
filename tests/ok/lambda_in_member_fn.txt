@@ -1,0 +1,16 @@
+struct Scale
+{
+    i32 k
+    fn apply := (i32 v) -> i32
+    {
+        fn multiply := [k](i32 x) -> i32
+        {
+            i32 r{k * x}
+            exit r
+        }
+        exit multiply(v)
+    }
+}
+Scale s{7}
+print(s.apply(6))
+exit s.apply(2)

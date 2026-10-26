@@ -1,0 +1,54 @@
+Program
+  Decl n i32 const
+    Const 0
+  Lambda next -> i32
+    Capture mut n
+    Block
+      Assign n
+        BinOp +
+          Var n
+          Const 1
+      Exit
+        Var n
+  Decl a i32 const
+    Call next
+  Decl b i32 const
+    Call next
+  Lambda left -> i32
+    Capture mut next
+    Block
+      Decl x i32 const
+        Call next
+      Decl y i32 const
+        Call next
+      Decl r i32 const
+        BinOp +
+          BinOp *
+            Var x
+            Const 10
+          Var y
+      Exit
+        Var r
+  Lambda right -> i32
+    Capture mut next
+    Block
+      Decl x i32 const
+        Call next
+      Decl y i32 const
+        Call next
+      Decl r i32 const
+        BinOp +
+          BinOp *
+            Var x
+            Const 10
+          Var y
+      Exit
+        Var r
+  Print
+    Call left
+  Print
+    Call right
+  Print
+    Call next
+  Exit
+    Var n

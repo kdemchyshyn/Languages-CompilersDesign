@@ -1,0 +1,1 @@
+compilation error: line 6:1: cannot assign to 'f': it is a lambda

@@ -1,0 +1,15 @@
+i32 n{5}
+i32 mut m{0}
+fn count := [mut n, mut m]() -> i32
+{
+    n := n + 1
+    m := m + 1
+    i32 result{n * 10 + m}
+    exit result
+}
+print(count())
+print(count())
+print(n)
+print(m)
+i32 result{n + m}
+exit result
