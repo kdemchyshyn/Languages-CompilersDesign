@@ -395,6 +395,9 @@ class CodeGen:
             return self.builder.load(ptr)
 
     def visit_call(self, node):
+        if getattr(node, "sugar", None) is not None:
+            return node.sugar.accept(self)
+
         arg_vals = []
         for i, arg in enumerate(node.args):
             val = arg.accept(self)

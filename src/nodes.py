@@ -256,12 +256,14 @@ class CallNode(ExprNode):
     def __init__(self, line, col, func_name, args):
         super().__init__(line, col)
         self.func_name = func_name
+        self.sugar = None
         self.args = args
         self.fn_decl = None
         self.widen_args = []
 
     def dump(self, indent=0):
-        print("  " * indent + f"Call {self.func_name}")
+        label = "CallableCall" if self.sugar is not None else "Call"
+        print("  " * indent + f"{label} {self.func_name}")
         for arg in self.args:
             arg.dump(indent + 1)
 
@@ -280,10 +282,14 @@ class MemberCallNode(ExprNode):
         self.fn_decl = None
         self.widen_args = []
         self.struct_name = None
+        self.callable_label = None
 
     def dump(self, indent=0):
-        print("  " * indent + f"MemberCall {self.name}")
-        self.target.dump(indent + 1)
+        if self.callable_label is not None:
+            print("  " * indent + f"CallableCall {self.callable_label}")
+        else:
+            print("  " * indent + f"MemberCall {self.name}")
+            self.target.dump(indent + 1)
         for arg in self.args:
             arg.dump(indent + 1)
 

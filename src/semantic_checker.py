@@ -65,6 +65,37 @@ class SemanticChecker:
                 return frame[name]
         return None
 
+    def find_variable(self, name):
+        decl = self.lookup_local(name)
+        if decl is not None:
+            return decl.type_name
+        if self.current_struct is not None and name in self.current_struct.fields:
+            return self.current_struct.fields[name].type_name
+        return None
+
+    def function_visible(self, name):
+        return name in self.functions or (
+            self.current_struct is not None
+            and not getattr(self.current_struct, "is_lambda", False)
+            and name in self.current_struct.methods
+        )
+
+    def require_callable(self, node, label, type_name):
+        if type_name in ("i32", "i64", "bool"):
+            self.error(node, f"'{label}' is not callable: it is {type_name}")
+        if "call" not in self.structs[type_name].methods:
+            self.error(node, f"'{label}' is not callable: {type_name} has no member function 'call'")
+
+    def visit_callable(self, node):
+        target = VarNode(node.line, node.col, node.func_name)
+        target_type = target.accept(self)
+        self.require_callable(node, node.func_name, target_type)
+        call = MemberCallNode(node.line, node.col, "call", target, node.args)
+        call.callable_label = node.func_name
+        node.type = call.accept(self)
+        node.sugar = call
+        return node.type
+
     def check_assignable(self, expr, want, at, what):
         have = expr.type
         if have == want or (have == "i32" and want == "i64"):
@@ -480,6 +511,11 @@ class SemanticChecker:
         return current_type
     
     def visit_call(self, node):
+        if self.find_variable(node.func_name) is not None:
+            if self.function_visible(node.func_name):
+                self.error(node, f"'{node.func_name}' is both a variable and a function: rename one of them")
+            return self.visit_callable(node)
+
         if self.current_struct is not None and node.func_name in self.current_struct.methods:
             # It is a call to a member function on the same object (this)!
             node.is_this_call = True
@@ -512,6 +548,28 @@ class SemanticChecker:
 
     def visit_member_call(self, node):
         target_type = node.target.accept(self)
+        if target_type in self.structs and node.name in self.structs[target_type].fields:
+            target = node.target
+            if isinstance(target, VarNode):
+                target = FieldNode(target.line, target.col, target.name, [node.name],
+                                   node.dot_line, node.dot_col)
+            elif isinstance(target, FieldNode):
+                target = FieldNode(target.line, target.col, target.base_name,
+                                   target.fields + [node.name], target.dot_line,
+                                   target.dot_col, target=target.target)
+            else:
+                target = FieldNode(target.line, target.col, None, [node.name],
+                                   node.dot_line, node.dot_col, target=target)
+            if target.base_name is not None:
+                node.callable_label = ".".join([target.base_name] + target.fields)
+            else:
+                node.callable_label = node.name
+            node.line = node.dot_line
+            node.col = node.dot_col + 1
+            node.name = "call"
+            node.target = target
+            target_type = target.accept(self)
+            self.require_callable(node, node.callable_label, target_type)
         
         if target_type not in self.structs:
             raise CompileError(f"line {node.dot_line}:{node.dot_col}: cannot call member function '{node.name}' on non-struct type {target_type}")
@@ -523,7 +581,8 @@ class SemanticChecker:
         fn_info = struct_info.methods[node.name]
         
         if len(node.args) != len(fn_info.params):
-            self.error(node, f"wrong number of arguments for '{node.name}': expected {len(fn_info.params)}, got {len(node.args)}")
+            label = node.callable_label if node.callable_label is not None else node.name
+            self.error(node, f"wrong number of arguments for '{label}': expected {len(fn_info.params)}, got {len(node.args)}")
             
         node.widen_args = []
         for arg, param in zip(node.args, fn_info.params):
@@ -560,6 +619,8 @@ class SemanticChecker:
         fn_info = node.fn_decl
         if fn_info.mutating:
             if not self.is_path_mutable(node.target):
+                if node.callable_label is not None:
+                    self.error(node, f"cannot call '{node.callable_label}': its 'call' changes it, and it is not mut")
                 from nodes import VarNode, FieldNode
                 if isinstance(node.target, VarNode):
                     path_str = node.target.name
