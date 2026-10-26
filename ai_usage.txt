@@ -563,3 +563,98 @@ Open questions: none. No failing reproduction to report.
 Kept as-is: code
 Changed by the student: None
 Removed/rejected by the student: None
+
+## [J4] Verify mutable captures (2026-10-26)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim): # Context from my IDE setup:
+
+## Active file: ai_usage.txt
+
+## Open tabs:
+- ai_usage.txt: ai_usage.txt
+- code_generator.py: src/code_generator.py
+- semantic_checker.py: src/semantic_checker.py
+- parser.py: src/parser.py
+- nodes.py: src/nodes.py
+
+## My request:
+JOB J4. Allowed source file ONLY IF needed: src/semantic_checker.py; always allow ai_usage.txt. No Git commands.
+
+Spec: additional task in docs/w08-practice.pdf. Verify FIRST, not by editing.
+
+Build the sheet's additional program with 4-space indent and no blank lines:
+
+1 i32 n{0}
+2 fn next := [mut n]() -> i32
+3 {
+4     n := n + 1
+5     exit n
+6 }
+7 print(next())
+8 print(next())
+9 fn twice := [mut next]() -> i32
+10 {
+11     i32 a{next()}
+12     i32 b{next()}
+13     i32 r{a * 10 + b}
+14     exit r
+15 }
+16 print(twice())
+17 print(next())
+18 exit n
+
+Expected: 1, 2, 34, 3, "Program exit with result 0".
+
+Check:
+(a) output;
+(b) changing [mut next] to [next] yields "line 11:11: cannot call 'next': its 'call' changes it, and it is not mut";
+(c) mut capture of a const outer variable works without mutating the original;
+(d) closure is mut iff any capture is mut;
+(e) a captured lambda is const unless [mut next].
+
+If anything fails, identify root cause and the minimal correction. Apply ONLY if correction is confined to semantic_checker.py. If another file is necessary, don't modify it; report under Needed elsewhere.
+
+Run baseline tests after any fix. Report explicitly whether J4 changed any code.
+
+Append J4 ai_usage entry and summarize. No Git actions.
+Files changed: ai_usage.txt — appended this J4 entry. J4 changed NO source code; no functions/classes were added or modified.
+What I did: Read AGENTS.md and the authoritative PDF additional-task text via the existing J1 extraction. Verified first using temporary fixtures under /tmp/practice8-j4, with expected outputs and error position derived before compilation. Built the exact 18-line sheet program with four-space indentation and no blank lines. Tested const outer variable copies, closure mutability flags, and const/mut captured lambdas. No correction was needed. SHA-256 snapshots of every src/*.py file before/after verification confirm source contents unchanged.
+Kept from existing code (deliberately untouched): All source files, including semantic_checker.py; all existing tests/.expected/.ast files; prior usage entries; all student review fields. No Git commands or Git metadata changes.
+Considered but NOT done / rejected (with reason): No semantic checker correction because all five requested checks passed. No changes to code generation or other source files; no dependencies installed; no repository tests added or changed.
+Needed elsewhere: none.
+Verification:
+Environment: source ~/lcd/bin/activate; existing Python 3.12.3 and llvmlite 0.49.0; lli 18.1.3.
+Baseline exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j4-before.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j4-before.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0. Matches historical baseline.
+Targeted exact shell commands:
+source ~/lcd/bin/activate
+python3 /tmp/practice8-j4/check.py > /tmp/practice8-j4/check.log 2>&1
+rc=$?
+tail -n 10 /tmp/practice8-j4/check.log
+exit "$rc"
+Result: exit status 0; all J4 checks passed. This harness writes all expected files before invoking compiler/lli. For each NAME in sheet, const-outer, const-lambda-legal, flags, it runs /home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j4/NAME.txt /tmp/practice8-j4/NAME.ll, then lli /tmp/practice8-j4/NAME.ll. All eight processes exit 0; stdout equals each prewritten NAME.expected exactly.
+(a) Sheet: output 1, 2, 34, 3, Program exit with result 0 (one per line). Hand derivation: next's private counter reaches 1 then 2; twice copies that state and produces 3*10+4=34; original next subsequently reaches 3; original const n remains 0.
+(b) Const-capture variant command: /home/lolyter/lcd/bin/python3 src/compiler.py --ast-checked /tmp/practice8-j4/const-capture.txt. Exit 1; stderr exactly: compilation error: line 11:11: cannot call 'next': its 'call' changes it, and it is not mut. Position calculated from the first next() on line 11, four spaces plus i32 a{ before the identifier.
+(c) Const outer x=7 captured as [mut x]: increment returns 8, printing original x gives 7, exiting x gives Program exit with result 7. Confirms mutable capture of const is allowed and modifies only the copied field. The exact sheet already exercises const outer n=0 similarly.
+(d) Closure mutability matrix: empty captures -> const; [x,y] -> const; [mut x,y] -> mut; [x,mut y] -> mut; [mut x,mut y] -> mut. Checked synthesized DeclNode.mutable and capture flags for every case. All generated call methods have nonmutating bodies, confirming closure mutability depends on the capture list, not whether the body mutates. Executing all five prints 0 five times, then Program exit with result 0.
+(e) Captured lambda fields are const with [one]/[next] and mut with [mut next]. A nonmutating captured lambda in a const field executes successfully (prints 1, exits with result 1). The mutating const-captured next is rejected at 11:11, while the mut-captured next in the sheet executes. Verified generated struct field is_mut flags, including the registered lambda.twice field after the expected error.
+Source integrity snapshot: /tmp/practice8-j4/source-hashes.json; harness asserts every src/*.py SHA-256 unchanged after all checks. No failure or root-cause correction needed.
+Post-log verification exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j4-after.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j4-after.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0. Source contents still match the pre-verification hash snapshot.
+Open questions: none.
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: ai_usage
+Changed by the student: None
+Removed/rejected by the student: None
