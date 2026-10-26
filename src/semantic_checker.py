@@ -5,13 +5,17 @@ from nodes import (
     BlockNode, IfNode, NotNode, WhileNode,
     InitListNode, FieldNode, CallNode, 
     StructNode, FunctionNode, ParamNode,
-    MemberFnNode, MemberCallNode
+    MemberFnNode, MemberCallNode, FieldDeclNode
 )
 
 I32_MAX = 2147483647
 I32_MIN = -2147483648
 I64_MAX = 9223372036854775807
 I64_MIN = -9223372036854775808
+
+def is_lambda_type(t):
+    return isinstance(t, str) and t.startswith("lambda.")
+
 
 class MemberFnInfo:
     def __init__(self, name, struct_name, params, return_type, node):
@@ -37,6 +41,7 @@ class StructInfo:
         self.fields = fields_dict  # name -> FieldInfo
         self.is_deeply_mut = is_deeply_mut
         self.methods = {}  # name -> MemberFnInfo
+        self.is_lambda = False
 
 
 class FnInfo:
@@ -55,6 +60,10 @@ class SemanticChecker:
         self.current_struct = None
         self.current_member_fn = None
         self.pending_member_calls = []
+        self.program = None
+        self.lambda_stack = []
+        self.lambda_names = {}
+        self.settled = False
 
     def error(self, node, message):
         raise CompileError(f"line {node.line}:{node.col}: {message}")
@@ -76,7 +85,7 @@ class SemanticChecker:
     def function_visible(self, name):
         return name in self.functions or (
             self.current_struct is not None
-            and not getattr(self.current_struct, "is_lambda", False)
+            and not self.current_struct.is_lambda
             and name in self.current_struct.methods
         )
 
@@ -105,6 +114,7 @@ class SemanticChecker:
         self.error(at, f"cannot {what} of type {want} with a value of type {have}")
 
     def visit_program(self, node):
+        self.program = node
         # Pass 1: Check and register structs
         for struct in node.structs:
             struct.accept(self)
@@ -122,7 +132,20 @@ class SemanticChecker:
             for method in struct.methods:
                 self.visit_member_fn(method, struct_info)
                 
-        # Pass 3b: Fixed-Point Loop for mutating flag 
+        # Pass 3b: Settle mutation flags and deferred calls
+        self.settle()
+        self.settled = True
+
+        # Pass 3c: Check global function bodies and top-level statements
+        for fn in node.functions:
+            fn.accept(self)
+            
+        for stmt in node.statements:
+            stmt.accept(self)
+            
+        node.exit.accept(self)
+
+    def settle(self):
         changed = True
         while changed:
             changed = False
@@ -136,15 +159,69 @@ class SemanticChecker:
                                 
         for call_node in self.pending_member_calls:
             self.verify_member_call_mutation(call_node)
-            
-        # Pass 3c: Check global function bodies and top-level statements
-        for fn in node.functions:
-            fn.accept(self)
-            
-        for stmt in node.statements:
-            stmt.accept(self)
-            
-        node.exit.accept(self)
+        self.pending_member_calls.clear()
+
+    def fresh_lambda_name(self, name):
+        count = self.lambda_names.get(name, 0) + 1
+        self.lambda_names[name] = count
+        return f"lambda.{name}" if count == 1 else f"lambda.{name}.{count}"
+
+    def not_captured(self, node, name):
+        if not self.lambda_stack:
+            return
+        lam, outer_scopes, outer_struct = self.lambda_stack[-1]
+        if (any(name in scope for scope in outer_scopes)
+                or (outer_struct is not None and name in outer_struct.fields)):
+            self.error(node, f"'{name}' is not captured by lambda '{lam}': add it to the capture list, [{name}]")
+
+    def visit_lambda(self, node):
+        seen = set()
+        fields = []
+        values = []
+        for capture in node.captures:
+            if capture.name in seen:
+                self.error(capture, f"'{capture.name}' is captured twice")
+            seen.add(capture.name)
+            if capture.name == "call":
+                self.error(capture, "a capture cannot be named 'call'")
+            if self.find_variable(capture.name) is None:
+                self.error(capture, f"cannot capture '{capture.name}': no variable '{capture.name}' is visible here")
+            value = VarNode(capture.line, capture.col, capture.name)
+            type_name = value.accept(self)
+            fields.append(FieldDeclNode(capture.line, capture.col, capture.name,
+                                        type_name, capture.mutable))
+            values.append(value)
+
+        for param in node.params:
+            if param.name in seen:
+                self.error(param, f"parameter '{param.name}' has the same name as a capture")
+
+        method = MemberFnNode(node.line, node.col, "call", node.return_type,
+                              node.params, node.body)
+        st = StructNode(node.line, node.col, self.fresh_lambda_name(node.name),
+                        fields, [method])
+        self.visit_struct(st)
+        self.register_struct_methods(st)
+        struct_info = self.structs[st.name]
+        struct_info.is_lambda = True
+        self.program.generated_structs.append(st)
+
+        self.lambda_stack.append((node.name, self.scopes, self.current_struct))
+        try:
+            self.visit_member_fn(method, struct_info)
+        finally:
+            self.lambda_stack.pop()
+
+        if self.settled:
+            self.settle()
+
+        init = InitListNode(node.name_line, node.name_col, values)
+        decl = DeclNode(node.name_line, node.name_col, node.name, st.name,
+                        any(capture.mutable for capture in node.captures), init)
+        decl.is_closure = True
+        self.visit_decl(decl)
+        node.struct = st
+        node.decl = decl
 
     def visit_struct(self, node):
         if node.name in self.structs:
@@ -243,16 +320,17 @@ class SemanticChecker:
         this_decl = DeclNode(node.line, node.col, "this", struct_info.name, True, None)
         node.this_decl = this_decl
         
-        for stmt in node.body.statements:
-            stmt.accept(self)
-            
-        if node.body.exit:
-            node.body.exit.accept(self)
-            
-        self.current_struct = saved_struct
-        self.current_member_fn = saved_method
-        self.current_fn_return_type = saved_ret_type
-        self.scopes = saved_scopes
+        try:
+            for stmt in node.body.statements:
+                stmt.accept(self)
+
+            if node.body.exit:
+                node.body.exit.accept(self)
+        finally:
+            self.current_struct = saved_struct
+            self.current_member_fn = saved_method
+            self.current_fn_return_type = saved_ret_type
+            self.scopes = saved_scopes
 
     def visit_function(self, node):
         saved_scopes = self.scopes
@@ -339,6 +417,8 @@ class SemanticChecker:
             
             f_info = self.current_struct.fields[node.name]
             if not f_info.is_mut:
+                if self.current_struct.is_lambda:
+                    self.error(node, f"cannot assign to '{node.name}': the capture '{node.name}' is const, write [mut {node.name}]")
                 self.error(node, f"cannot assign through const field '{node.name}'")
                 
             node.field_indices.append(f_info.index)
@@ -349,6 +429,7 @@ class SemanticChecker:
             self.error(node, f"'{node.name}' is a type, not a variable")
             
         else:
+            self.not_captured(node, node.name)
             self.error(node, f"variable '{node.name}' is used before its declaration")
             
         for f_name in node.fields:
@@ -424,6 +505,7 @@ class SemanticChecker:
         if node.name in self.structs:
             self.error(node, f"'{node.name}' is a type, not a variable")
             
+        self.not_captured(node, node.name)
         self.error(node, f"variable '{node.name}' is used before its declaration")
 
     def visit_const(self, node):
@@ -495,6 +577,7 @@ class SemanticChecker:
                 self.error(node, f"'{node.base_name}' is a type, not a variable")
                 
             else:
+                self.not_captured(node, node.base_name)
                 self.error(node, f"variable '{node.base_name}' is used before its declaration")
 
         for f_name in node.fields:
@@ -516,7 +599,8 @@ class SemanticChecker:
                 self.error(node, f"'{node.func_name}' is both a variable and a function: rename one of them")
             return self.visit_callable(node)
 
-        if self.current_struct is not None and node.func_name in self.current_struct.methods:
+        if (self.current_struct is not None and not self.current_struct.is_lambda
+                and node.func_name in self.current_struct.methods):
             # It is a call to a member function on the same object (this)!
             node.is_this_call = True
             node.this_decl = self.current_member_fn.node.this_decl
@@ -526,6 +610,7 @@ class SemanticChecker:
         else:
             node.is_this_call = False
             if node.func_name not in self.functions:
+                self.not_captured(node, node.func_name)
                 self.error(node, f"unknown function '{node.func_name}'")
             fn_decl = self.functions[node.func_name]
             node.fn_decl = fn_decl

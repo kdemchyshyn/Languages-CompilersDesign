@@ -285,6 +285,104 @@ Exact CLI diagnostic checks (all exit 1, with unchanged compilation error prefix
 Additional inline Python subprocess verification in the activated environment compiled /tmp/practice8-j2/j1-spaced-sheet.txt to /tmp/practice8-j2/j1-spaced-sheet.ll, executed lli, and compared against the hand-derived J1 sheet output: 42, 42, 14, 10, Counter{n: 2}, Program exit with result 12. This program uses multiple spaces on callable-field/ordinary-method calls and a tab on the explicit .call. It retains all six output lines. Recompiled the exact prior J1 discrepancy fixture /tmp/practice8-j1/spaced-field.txt; now reports line 34:11, matching its original hand-derived expectation (previously 34:9).
 Open questions: none; full lambda checking/execution remains intentionally deferred to later jobs.
 --- STUDENT REVIEW (student fills after review) ---
+Kept as-is: code
+Changed by the student: None
+Removed/rejected by the student: None
+
+## [J3a] Lambda semantics and lowering (2026-10-26)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim): # Context from my IDE setup:
+
+## Active file: src/semantic_checker.py
+
+## Open tabs:
+- semantic_checker.py: src/semantic_checker.py
+- parser.py: src/parser.py
+- nodes.py: src/nodes.py
+- lexer.py: src/lexer.py
+- compiler.py: src/compiler.py
+
+## My request:
+JOB J3a. Allowed file: src/semantic_checker.py plus ai_usage.txt. Depends on J1/J2. No Git commands.
+
+Spec: Task 2, focusing on semantics and lambda lowering; value restrictions are J3b and LLVM generation is J3c.
+
+Infrastructure:
+1. StructInfo.is_lambda = False; module-level is_lambda_type(t) -> isinstance(t,str) and t.startswith("lambda.").
+2. Checker __init__: program=None, lambda_stack=[], lambda_names={}, settled=False.
+3. Extract Pass 3b mutation fixed-point propagation and pending-member-call verification into settle(): run propagation until stable, verify pending calls, clear the list. In visit_program set self.program=node, call settle at previous Pass 3b location, and set self.settled=True after it. Do not change existing behavior.
+4. fresh_lambda_name(name): first "lambda.NAME", subsequent "lambda.NAME.2", "lambda.NAME.3", etc.
+5. function_visible should use current struct's is_lambda, not getattr.
+
+Implement visit_lambda in this sequence:
+1. Process captures with seen set: duplicate error "'{name}' is captured twice"; capture named "call" error "a capture cannot be named 'call'"; missing visible variable error "cannot capture '{name}': no variable '{name}' is visible here". For each valid capture, construct VarNode at capture identifier position, check its type, make FieldDeclNode(name,type,mutable), save VarNode in init list.
+2. Param whose name is a capture -> "parameter '{name}' has the same name as a capture" at parameter.
+3. Generate MemberFnNode("call", params, return_type, body) and StructNode with fresh lambda name and capture fields; visit_struct and register_struct_methods; set structs[st.name].is_lambda=True, append st to program.generated_structs.
+4. Push (lambda_name, outer_scopes, outer_current_struct) on lambda_stack; visit_member_fn; pop in a finally-safe manner.
+5. If already settled, call settle() to finalize mutating calls before this closure can be called.
+6. Synthesize DeclNode at lambda name coordinates, type st.name, mutable iff any capture is mut, InitListNode of captured values. Set decl.is_closure=True; visit_decl; set node.struct and node.decl. Declare closure AFTER its body, preventing recursion.
+
+Scope rules:
+- not_captured(node,name): for top lambda_stack entry, if name is in immediately enclosing scopes or outer struct fields, emit "'{name}' is not captured by lambda '{lam}': add it to the capture list, [{name}]".
+- Invoke before final used-before-declaration errors in visit_var, visit_assign, visit_field; before unknown-function error in visit_call. Do not turn genuinely unknown names into capture errors.
+- In visit_assign lambda field branch, before generic const-field message, const capture assignment -> "cannot assign to '{name}': the capture '{name}' is const, write [mut {name}]".
+- In visit_call skip current-struct method resolution when current_struct.is_lambda, so bare call(...) cannot call itself.
+
+Verify that existing baseline tests still pass, that the new semantic tree matches the sheet's Lambda/Struct/MemberFn/Decl shape, and that obvious missing/duplicate capture errors have correct positions. Do not attempt or claim successful lambda execution before J3c. Only fix src/semantic_checker.py issues; list other needs in ai_usage.
+
+Append J3a ai_usage entry and summarize. No Git actions.
+Files changed:
+- src/semantic_checker.py: imported FieldDeclNode; added module-level is_lambda_type; initialized StructInfo.is_lambda and checker program/lambda_stack/lambda_names/settled state; extracted settle and updated visit_program; added fresh_lambda_name, not_captured, visit_lambda; updated function_visible, visit_var, visit_assign, visit_field, and visit_call for lambda scopes/capture diagnostics and method resolution; made visit_member_fn body-context restoration finally-safe for lambda body errors.
+- ai_usage.txt: appended this J3a entry.
+What I did: Read repository instructions and the authoritative Task 2 text extracted from docs/w08-practice.pdf during J1 (PDF remains accessible). Implemented capture validation, generated lambda struct/call method registration, checked lambda bodies in isolated member scopes, and synthesized/declared closure variables after body checking. Captures retain their source-identifier bindings in closure initializers; generated declarations use lambda-name positions. Added collision-free generated names, immediate-enclosing-scope missing-capture diagnostics, const-capture assignment diagnostics, and mutation settling for generated methods before closures can be called. Used existing AST constructor argument ordering. Preserved CRLF line endings. Created verification fixtures/harnesses only under /tmp/practice8-j3a with expected AST fragments and diagnostics derived by hand before comparison.
+Kept from existing code (deliberately untouched): Parser, AST classes/dump code, lexer, compiler CLI, src/code_generator.py, all repository tests/expected/AST files, ordinary non-lambda error messages and resolution, J1 callable rewrites and J2 identifier position metadata. Earlier usage entries and student review fields left unchanged. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No J3b lambda value restrictions or J3c LLVM work; no lambda generation/execution attempted or claimed. No dependency installation, source changes outside src/semantic_checker.py, or repository test changes. is_lambda_type is provided for later restrictions without imposing them in J3a.
+Needed elsewhere: J3b must add the deferred lambda value restrictions (passing/returning/assigning/printing/explicit external capture access, etc.); J3c must teach code generation to emit generated structs/methods and closure declarations. No other blockers found for J3a.
+Verification:
+All test/check commands used source ~/lcd/bin/activate (existing Python 3.12.3, llvmlite 0.49.0).
+Baseline exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j3a-before.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j3a-before.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0.
+Post-source-edit exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j3a-after.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j3a-after.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0. Matches baseline; no existing-test regression.
+Sheet checked-AST command: python3 src/compiler.py --ast-checked /tmp/practice8-j2/sheet.txt > /tmp/practice8-j3a/sheet.checked.ast (exit 0). Matches hand-derived Lambda add_k -> Struct lambda.add_k -> Member k i32 const / MemberFn call -> Param y i32 / Block, followed by Decl add_k lambda.add_k const / Var k. Nested times similarly becomes Struct lambda.times, capture field factor, MemberFn call, and its closure Decl; calls dump CallableCall. No LLVM generation invoked.
+Targeted exact shell commands:
+source ~/lcd/bin/activate
+python3 /tmp/practice8-j3a/check.py > /tmp/practice8-j3a/check.log 2>&1
+rc=$?
+tail -n 24 /tmp/practice8-j3a/check.log
+exit "$rc"
+Result: exit status 0; all targeted checks passed. Hand-derived expected sheet fragments are in /tmp/practice8-j3a/sheet.fragments.expected. Verified generated_structs order lambda.times/lambda.add_k, captured initializer binding to the original k declaration, declaration position 17:4, closure/type flags, method body reuse, settled state and cleared pending calls.
+Exact CLI errors (all checked with --ast-checked; exit 1 and exact compilation error prefix/wording):
+- Missing capture use: 19:11, 'k' is not captured by lambda 'add_k': add it to the capture list, [k].
+- Duplicate capture: 17:17, 'k' is captured twice.
+- Invisible capture: 8:26, cannot capture 'k': no variable 'k' is visible here.
+- Const capture assignment: 19:5, cannot assign to 'k': the capture 'k' is const, write [mut k].
+- Capture/parameter collision: 17:17, parameter 'k' has the same name as a capture (existing ParamNode position begins at the type).
+- Missing capture assignment: 19:5, expected capture diagnostic.
+- Genuinely unknown variable/function: 19:11, retain used-before-declaration / unknown-function diagnostics rather than capture errors.
+- Capture named call: 2:10, a capture cannot be named 'call'.
+- Recursive f(): 3:10, unknown function 'f'; bare call(): 3:10, unknown function 'call'.
+- Missing enclosing variable field access: 8:10; missing enclosing callable: 7:10; both use missing-capture messages.
+- A grandparent k invisible to the immediate enclosing lambda remains a genuinely unknown variable at 6:14; when immediately enclosing lambda captures k, the inner lambda gets a missing-capture diagnostic at 6:14.
+Additional targeted assertions: sibling scopes generate lambda.f, lambda.f.2, lambda.f.3; mutable scalar captures make the closure mutable and call method mutating; another closure can be captured and called via existing J1 machinery; global function named call stays resolvable inside a lambda; lambda stack, scopes, current_struct and current_member_fn restore after a body diagnostic.
+Mutation exact shell commands:
+source ~/lcd/bin/activate
+python3 /tmp/practice8-j3a/mutation-check.py
+Result: exit 0. Verified fixed-point propagation Counter.call -> Counter.bump -> direct mutation, and propagation into lambda.f when the lambda is declared both before the original settling pass (inside a user member) and after it (top level). Pending calls clear. A Host member capturing its field by mutable copy remains nonmutating itself. Removing mut from the captured Counter reports the required callable mutation error at 17:10 (late case) and 21:18 (early case). Missing enclosing struct-field capture also reports correctly at 21:18. Semantic checks only.
+Open questions: none; J3b value restrictions and J3c LLVM generation remain intentionally pending.
+--- STUDENT REVIEW (student fills after review) ---
 Kept as-is: PENDING REVIEW
 Changed by the student: PENDING REVIEW
 Removed/rejected by the student: PENDING REVIEW
