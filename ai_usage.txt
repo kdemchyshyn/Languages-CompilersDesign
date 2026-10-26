@@ -158,3 +158,133 @@ Open questions: Exact called-field positions after whitespace require parser met
 Kept as-is: code chanes
 Changed by the student: None
 Removed/rejected by the student: None
+
+## [J2] Lambda syntax and exact callable-field positions (2026-10-26)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim): # Context from my IDE setup:
+
+## Active file: src/code_generator.py
+
+## Open tabs:
+- code_generator.py: src/code_generator.py
+
+## My request:
+JOB J2. Allowed files: src/lexer.py, src/nodes.py, src/parser.py, src/compiler.py, src/semantic_checker.py, plus ai_usage.txt. No Git commands.
+
+Spec: Task 2 syntax in docs/w08-practice.pdf.
+
+IMPORTANT J1 COMPATIBILITY FIX:
+A minor diagnostic-position bug remains from J1 and should be fixed as part of this job because J2 already modifies parser/AST metadata.
+
+Currently callable-field rewriting in semantic_checker.py derives the member/call-name column as dot_col + 1. This is wrong when whitespace appears after '.', e.g. `s.  side()`: if `side` starts at column 11, the diagnostic may incorrectly report column 9.
+
+Fix this properly using parser/AST source metadata:
+- Preserve the actual source position (line/column) of the member identifier when parsing member access/calls.
+- Use that preserved member-name position in semantic_checker.py when a callable field/member call is rewritten and its diagnostic location is needed.
+- Do NOT derive the identifier position from dot_col + 1.
+- Preserve all existing behavior for ordinary member calls and J1 callable-field rewriting.
+- Verify at minimum that a callable-field diagnostic for `s.  side()` points to the actual start of `side`, not the position immediately after '.'.
+- Also check multiple spaces and, if naturally supported by the lexer/parser, tabs after '.'.
+- Keep this fix narrowly scoped. Do not otherwise redesign or refactor J1.
+
+lexer.py:
+- In START add '[' as Token("lbracket", "[", line, col) and ']' as Token("rbracket", "]", line, col), matching parentheses.
+- Check whether an existing error test depends on '[' or ']' being an unexpected byte; report, do not change the test.
+
+nodes.py:
+- CaptureNode(Node): fields (line, col, name, mutable); source position is identifier, not mut; dump "Capture k" / "Capture mut k".
+- LambdaNode(StmtNode), defined after StmtNode: (line, col, name, captures, params, return_type, body, name_line, name_col); fields struct=None, decl=None; accept via visitor.visit_lambda(self).
+- Dump "Lambda <name> -> <return_type>"; before checking dump captures, params, body; after checking dump its synthesized struct and decl at indent+1 (as in spec).
+- ProgramNode.generated_structs = []; do not print in ProgramNode.dump.
+
+parser.py:
+- First refactor parse_fn by extracting parse_signature_tail(), beginning at '(' and handling params, ')', '->', return type, end-of-line, '{' on its own line, parse_block("fn"), and required final exit. Return (params, return_type, body). Preserve all prior messages.
+- is_lambda_start(): len(self.toks) > 3, first token keyword "fn", fourth token kind "lbracket".
+- parse_program: exclude lambda starts from the ordinary function loop, permit lambda starts as statements, retain existing error for normal function declaration after statements.
+- parse_statement: when fn+lambda start, call parse_lambda (consumes lines); otherwise old error.
+- parse_lambda: fn, name (with existing reserved-name check), ':=', '[', zero or more captures (optional 'mut', identifier, commas), ']', parse_signature_tail; construct LambdaNode with both name coordinates.
+- parse_fn(is_member=True): '[' after ':=' raises at that token "a capture list is only allowed on a lambda, not on a member function".
+- While touching member parsing, preserve the actual member identifier source coordinates needed by the J1 compatibility fix above. Do not approximate them from the dot position.
+
+semantic_checker.py:
+- Only modify what is necessary for the J1 diagnostic-position compatibility fix described above.
+- In particular, update callable-field/member-call rewriting to use the actual preserved member identifier position rather than dot_col + 1.
+- Do not make unrelated semantic changes and do not implement J3 functionality here.
+
+compiler.py:
+- Add --ast-checked flag.
+- After ordinary --ast early-exit and before checking for required output filename, execute SemanticChecker().visit_program(program), program.dump(), and exit 0.
+- Keep --ast behavior unchanged.
+
+VERIFY:
+1. Run the baseline test suite and report exact passed/failed counts.
+2. Parse AST for the Task 2 sheet program and verify Lambda, Capture, Param, and Block structure.
+3. Verify unchanged rejection of `fn f := (...)` inside a block.
+4. Verify the J1 callable-field diagnostic position with whitespace after '.', specifically a case such as `s.  side()`. The reported position must be the actual start of `side`.
+5. Check that ordinary member-call diagnostics/behavior remain unchanged.
+6. Full --ast-checked of lambda programs is NOT expected to work until J3a/J3b; report that honestly, not as an existing-test regression.
+
+If an existing error test depends on '[' or ']' being an unexpected byte, report it but DO NOT modify that test.
+
+Append a J2 ai_usage entry describing:
+- Task 2 changes,
+- the J1 diagnostic-position compatibility fix,
+- tests/verification performed,
+- any known limitations.
+
+Summarize changed files, verification results, and any remaining issues.
+
+No Git commands.
+Files changed:
+- src/lexer.py: lex START recognizes lbracket/rbracket at their actual source positions.
+- src/nodes.py: added CaptureNode and LambdaNode constructors/dumps and LambdaNode.accept; ProgramNode.__init__ initializes generated_structs (not dumped); FieldNode and MemberCallNode constructors retain optional name_line/name_col metadata without altering existing dump output.
+- src/parser.py: extracted parse_signature_tail from parse_fn without changing prior signature/body errors; added is_lambda_start and parse_lambda; updated parse_program/parse_statement to accept lambdas as statements; parse_fn rejects member capture lists at '['; member access/call parsing stores actual final member identifier coordinates.
+- src/compiler.py: added --ast-checked argument and early checked-tree dump path after --ast and before the required output check.
+- src/semantic_checker.py: visit_member_call only; replaced dot-based position approximation with preserved name_line/name_col for callable-field rewrites and retained that metadata on the synthesized field target. No lambda semantics or other J1 redesign.
+- ai_usage.txt: appended this J2 entry.
+What I did: Read AGENTS.md and Task 2 syntax/rewrite text from the authoritative PDF extraction produced during J1 (the PDF remains accessible). Implemented syntax-only lambda parsing including empty/multiple/mut captures, parameter lists, required final exit, and nesting in all statement contexts. Capture coordinates identify the captured identifier rather than mut. Lambda dumps use captures/params/body before semantic rewriting, or struct/decl once those fields are supplied. Fixed the J1 whitespace diagnostic bug using parser-provided identifier coordinates. Preserved CRLF source line endings. Created only temporary verification fixtures/harnesses under /tmp/practice8-j2, with expected AST fragments and errors/positions derived by hand before comparisons.
+Kept from existing code (deliberately untouched): src/code_generator.py; all repository tests, .expected and .ast files; existing --ast parse-tree early exit; ordinary function/member signature parsing wording; ordinary member-call diagnostic positions and behavior; argument and mutation logic; all other semantic behavior. Previous usage entries and student review fields left unchanged. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No visit_lambda semantic checking/synthesis, lambda execution/code generation, capture validation, or other J3 work (explicitly deferred). No dependency installation. No changes to existing tests, including bracket-related expectations. Search found no existing error test depending on '[' or ']' being an unexpected byte.
+Needed elsewhere: J3a/J3b must implement lambda semantic checking and synthesis before lambda --ast-checked can succeed; later lambda code generation is also outside J2. The J1 whitespace-position limitation is resolved in this job.
+Verification:
+Environment: source ~/lcd/bin/activate; existing Python 3.12.3 and llvmlite 0.49.0; lli 18.1.3. No installation.
+Bracket dependency check command: rg -n '\[|\]' tests/err/*.txt tests/err/*.expected (no matches).
+Baseline exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j2-before.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j2-before.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0, matching historical baseline.
+Post-source-edit exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j2-after.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j2-after.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0. No existing-test regression.
+Targeted verification exact shell commands:
+source ~/lcd/bin/activate
+python3 /tmp/practice8-j2/check.py > /tmp/practice8-j2/check.log 2>&1
+rc=$?
+tail -n 24 /tmp/practice8-j2/check.log
+exit "$rc"
+Result: exit status 0; all targeted checks passed. The harness invokes src/compiler.py via the activated interpreter and checks return codes, hand-derived AST fragments, and exact diagnostics. Task 2 sheet AST is in /tmp/practice8-j2/sheet.ast. Verified Lambda times nested inside sum_scaled with Capture factor, Param v i32, Block, expected expression tree; top-level Lambda add_k with Capture k, Param y i32, Block. Verified times name/capture positions 8:8 / 8:18 and add_k 17:4 / 17:14. Mutable capture k in the separate fixture is at 1:14 (identifier, not mut). Empty/multiple captures and multiple parameters parse. Lambdas parse inside a function, member, if, while, and another lambda. Verified checked LambdaNode dump using supplied existing AST nodes, visitor dispatch, bracket token positions, and generated_structs omission from ProgramNode.dump.
+Exact CLI diagnostic checks (all exit 1, with unchanged compilation error prefix):
+- Ordinary fn in a block: 3:5, function/struct declaration is not allowed after statements or inside a block.
+- Ordinary fn after lambda statements: 5:1, function declaration is not allowed after statements.
+- Member capture list: 4:13, a capture list is only allowed on a lambda, not on a member function.
+- Reserved lambda name print: 1:4; reserved capture read after mut: 1:14; both retain built-in-name rejection.
+- Lambda missing final exit: 2:1, function block must end with an exit statement.
+- Callable i32 field print(s.  side()): 10:11, 's.side' is not callable: it is i32. Five spaces -> 10:14; tab -> 10:10; mixed space/tab -> 10:13, matching lexer source-column accounting. Also verified field access metadata itself.
+- Ordinary missing method after two spaces remains at receiver position 10:7; ordinary wrong method arity remains at 10:7; primitive member error remains at dot position 2:8.
+- Existing J1 sheet --ast-checked succeeds without an output filename and retains CallableCall triple/s.scale. Combined --ast --ast-checked on the lambda sheet still prints the parse tree and exits 0, preserving --ast precedence.
+- Lambda sheet --ast-checked exits nonzero with AttributeError for missing visit_lambda; expected at this intermediate syntax-only stage. Captured stderr: /tmp/practice8-j2/sheet.checked.stderr. This is not an existing-test regression.
+Additional inline Python subprocess verification in the activated environment compiled /tmp/practice8-j2/j1-spaced-sheet.txt to /tmp/practice8-j2/j1-spaced-sheet.ll, executed lli, and compared against the hand-derived J1 sheet output: 42, 42, 14, 10, Counter{n: 2}, Program exit with result 12. This program uses multiple spaces on callable-field/ordinary-method calls and a tab on the explicit .call. It retains all six output lines. Recompiled the exact prior J1 discrepancy fixture /tmp/practice8-j1/spaced-field.txt; now reports line 34:11, matching its original hand-derived expectation (previously 34:9).
+Open questions: none; full lambda checking/execution remains intentionally deferred to later jobs.
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: PENDING REVIEW
+Changed by the student: PENDING REVIEW
+Removed/rejected by the student: PENDING REVIEW

@@ -564,8 +564,10 @@ class SemanticChecker:
                 node.callable_label = ".".join([target.base_name] + target.fields)
             else:
                 node.callable_label = node.name
-            node.line = node.dot_line
-            node.col = node.dot_col + 1
+            target.name_line = node.name_line
+            target.name_col = node.name_col
+            node.line = node.name_line
+            node.col = node.name_col
             node.name = "call"
             node.target = target
             target_type = target.accept(self)

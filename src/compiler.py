@@ -11,6 +11,7 @@ parser.add_argument("input", help="Path to the input source file (e.g., input.tx
 parser.add_argument("output", nargs="?", help="Path to the output LLVM IR file (e.g., output.ll)")
 parser.add_argument("--tokens", action="store_true", help="Print the generated tokens")
 parser.add_argument("--ast", action="store_true", help="Print the generated AST")
+parser.add_argument("--ast-checked", action="store_true", help="Print the AST after semantic checking")
 args = parser.parse_args()
 
 lines = []
@@ -26,6 +27,11 @@ if args.tokens:
 parser = Parser(lines)
 program = parser.parse_program()
 if args.ast:
+    program.dump()
+    sys.exit(0)
+
+if args.ast_checked:
+    SemanticChecker().visit_program(program)
     program.dump()
     sys.exit(0)
 
