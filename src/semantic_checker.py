@@ -105,6 +105,32 @@ class SemanticChecker:
         node.sugar = call
         return node.type
 
+    def expression_label(self, node):
+        if isinstance(node, VarNode):
+            return node.name
+        if isinstance(node, FieldNode):
+            base = node.base_name if node.base_name is not None else self.expression_label(node.target)
+            return ".".join([base] + node.fields)
+        if isinstance(node, CallNode):
+            return node.func_name + "()"
+        if isinstance(node, MemberCallNode):
+            return self.expression_label(node.target) + "." + node.name + "()"
+        return "expression"
+
+    def check_lambda_argument(self, arg, type_name, callee):
+        if isinstance(arg, VarNode) and is_lambda_type(type_name):
+            self.error(arg, f"'{arg.name}' is a lambda and cannot be passed to '{callee}': its type has no name, so no parameter can have it")
+
+    def check_lambda_initializer(self, value, type_name):
+        if is_lambda_type(type_name):
+            self.error(value, f"cannot initialise with '{self.expression_label(value)}': it is a lambda, and its type has no name")
+
+    def check_lambda_assignment(self, node, type_name, fields, path):
+        if is_lambda_type(type_name):
+            if fields:
+                self.error(node, f"'{fields[0]}' is a capture of '{path}' and is not visible outside its body")
+            self.error(node, f"cannot assign to '{path}': it is a lambda")
+
     def check_assignable(self, expr, want, at, what):
         have = expr.type
         if have == want or (have == "i32" and want == "i64"):
@@ -365,6 +391,8 @@ class SemanticChecker:
             if isinstance(val, InitListNode):
                 self.error(val, "nested {} initializer not allowed for built-in types")
             have = val.accept(self)
+            if not getattr(node, "is_closure", False):
+                self.check_lambda_initializer(val, have)
             self.check_assignable(val, type_name, node, f"initialise '{node.name}'")
         else:
             struct_info = self.structs[type_name]
@@ -374,15 +402,18 @@ class SemanticChecker:
             if len(node.init.values) == 1 and not isinstance(node.init.values[0], InitListNode):
                 val = node.init.values[0]
                 have = val.accept(self)
+                if not getattr(node, "is_closure", False):
+                    self.check_lambda_initializer(val, have)
                 if have == type_name:
                     node.is_copy_init = True
                     
             if not node.is_copy_init:
-                self.check_initializer(node.init, node.init.values, struct_info)
+                self.check_initializer(node.init, node.init.values, struct_info,
+                                       allow_lambda=getattr(node, "is_closure", False))
 
         self.scopes[-1][node.name] = node
 
-    def check_initializer(self, context_node, values, struct_info):
+    def check_initializer(self, context_node, values, struct_info, allow_lambda=False):
         if len(values) != len(struct_info.fields):
             self.error(context_node, f"wrong number of values in {{}}: expected {len(struct_info.fields)}, got {len(values)}")
             
@@ -391,9 +422,12 @@ class SemanticChecker:
                 if f_info.type_name not in self.structs:
                     self.error(val, f"nested {{}} initializer not allowed for field '{f_name}' of type {f_info.type_name}")
                 val.struct_type = f_info.type_name
-                self.check_initializer(val, val.values, self.structs[f_info.type_name])
+                self.check_initializer(val, val.values, self.structs[f_info.type_name],
+                                       allow_lambda=allow_lambda)
             else:
                 have = val.type if val.type is not None else val.accept(self)
+                if not allow_lambda:
+                    self.check_lambda_initializer(val, have)
                 if f_info.type_name in self.structs:
                     if have != f_info.type_name:
                         self.error(val, f"cannot initialize field '{f_name}' of type {f_info.type_name} with {have}")
@@ -407,6 +441,7 @@ class SemanticChecker:
         
         if decl is not None:
             node.decl = decl
+            self.check_lambda_assignment(node, decl.type_name, node.fields, node.name)
             if not decl.mutable:
                 self.error(node, f"cannot assign to constant variable '{node.name}'")
             current_type = decl.type_name
@@ -416,6 +451,7 @@ class SemanticChecker:
             node.this_decl = self.current_member_fn.node.this_decl
             
             f_info = self.current_struct.fields[node.name]
+            self.check_lambda_assignment(node, f_info.type_name, node.fields, node.name)
             if not f_info.is_mut:
                 if self.current_struct.is_lambda:
                     self.error(node, f"cannot assign to '{node.name}': the capture '{node.name}' is const, write [mut {node.name}]")
@@ -432,7 +468,9 @@ class SemanticChecker:
             self.not_captured(node, node.name)
             self.error(node, f"variable '{node.name}' is used before its declaration")
             
+        path = node.name
         for f_name in node.fields:
+            self.check_lambda_assignment(node, current_type, [f_name], path)
             if current_type not in self.structs:
                 self.error(node, f"cannot access field '{f_name}' on non-struct type {current_type}")
             struct_info = self.structs[current_type]
@@ -445,19 +483,25 @@ class SemanticChecker:
                 
             node.field_indices.append(f_info.index)
             current_type = f_info.type_name
-            
+            path += "." + f_name
+
+        self.check_lambda_assignment(node, current_type, [], path)
         if current_type in self.structs:
             if not self.structs[current_type].is_deeply_mut:
                 self.error(node, f"':=' can replace a whole mut object only if all its fields, at every depth, are mut")
                 
-        node.value.accept(self)
+        value_type = node.value.accept(self)
+        if is_lambda_type(value_type):
+            self.error(node.value, f"cannot assign from '{self.expression_label(node.value)}': it is a lambda, and its type has no name")
         self.check_assignable(
             node.value, current_type, node, f"assign to '{node.name}{'.' + '.'.join(node.fields) if node.fields else ''}'"
         )
 
     def visit_exit(self, node):
         have_type = node.value.accept(self)
-        
+        if is_lambda_type(have_type):
+            self.error(node.value, f"cannot exit with '{self.expression_label(node.value)}': it is a lambda, and its type has no name")
+
         if self.current_fn_return_type is not None:
             want_type = self.current_fn_return_type
             if have_type != want_type and not (have_type == "i32" and want_type == "i64"):
@@ -580,7 +624,10 @@ class SemanticChecker:
                 self.not_captured(node, node.base_name)
                 self.error(node, f"variable '{node.base_name}' is used before its declaration")
 
+        path = node.base_name if node.base_name is not None else self.expression_label(node.target)
         for f_name in node.fields:
+            if is_lambda_type(current_type):
+                self.error(node, f"'{f_name}' is a capture of '{path}' and is not visible outside its body")
             if current_type not in self.structs:
                 self.error(node, f"cannot access field '{f_name}' on non-struct type {current_type}")
             struct_info = self.structs[current_type]
@@ -589,6 +636,7 @@ class SemanticChecker:
             f_info = struct_info.fields[f_name]
             node.field_indices.append(f_info.index)
             current_type = f_info.type_name
+            path += "." + f_name
             
         node.type = current_type
         return current_type
@@ -621,6 +669,7 @@ class SemanticChecker:
         node.widen_args = []
         for arg, param in zip(node.args, fn_decl.params):
             arg_type = arg.accept(self)
+            self.check_lambda_argument(arg, arg_type, node.func_name)
             if arg_type == param.type_name:
                 node.widen_args.append(False)
             elif arg_type == "i32" and param.type_name == "i64":
@@ -634,6 +683,9 @@ class SemanticChecker:
     def visit_member_call(self, node):
         target_type = node.target.accept(self)
         if target_type in self.structs and node.name in self.structs[target_type].fields:
+            if is_lambda_type(target_type):
+                base = self.expression_label(node.target)
+                raise CompileError(f"line {node.name_line}:{node.name_col}: '{node.name}' is a capture of '{base}' and is not visible outside its body")
             target = node.target
             if isinstance(target, VarNode):
                 target = FieldNode(target.line, target.col, target.name, [node.name],
@@ -671,9 +723,13 @@ class SemanticChecker:
             label = node.callable_label if node.callable_label is not None else node.name
             self.error(node, f"wrong number of arguments for '{label}': expected {len(fn_info.params)}, got {len(node.args)}")
             
+        callee = node.callable_label if node.callable_label is not None else node.name
+        if node.callable_label is None and node.name == "call":
+            callee = self.expression_label(node.target)
         node.widen_args = []
         for arg, param in zip(node.args, fn_info.params):
             arg_type = arg.accept(self)
+            self.check_lambda_argument(arg, arg_type, callee)
             if arg_type == param.type_name:
                 node.widen_args.append(False)
             elif arg_type == "i32" and param.type_name == "i64":
@@ -779,5 +835,7 @@ class SemanticChecker:
             return None
             
         arg_type = node.arg.accept(self)
+        if is_lambda_type(arg_type):
+            self.error(node.arg, f"cannot print '{self.expression_label(node.arg)}': it is a lambda")
         if arg_type not in ("i32", "i64", "bool") and arg_type not in self.structs:
             self.error(node.arg, f"cannot print value of type {arg_type}")

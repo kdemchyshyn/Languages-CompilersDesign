@@ -383,6 +383,94 @@ python3 /tmp/practice8-j3a/mutation-check.py
 Result: exit 0. Verified fixed-point propagation Counter.call -> Counter.bump -> direct mutation, and propagation into lambda.f when the lambda is declared both before the original settling pass (inside a user member) and after it (top level). Pending calls clear. A Host member capturing its field by mutable copy remains nonmutating itself. Removing mut from the captured Counter reports the required callable mutation error at 17:10 (late case) and 21:18 (early case). Missing enclosing struct-field capture also reports correctly at 21:18. Semantic checks only.
 Open questions: none; J3b value restrictions and J3c LLVM generation remain intentionally pending.
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: PENDING REVIEW
-Changed by the student: PENDING REVIEW
-Removed/rejected by the student: PENDING REVIEW
+Kept as-is: Code + ai_usage
+Changed by the student: None
+Removed/rejected by the student: None
+
+## [J3b] Restrictions on unnamed lambda values (2026-10-26)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim): # Context from my IDE setup:
+
+## Active file: ai_usage.txt
+
+## Open tabs:
+- ai_usage.txt: ai_usage.txt
+- semantic_checker.py: src/semantic_checker.py
+- parser.py: src/parser.py
+- nodes.py: src/nodes.py
+- lexer.py: src/lexer.py
+
+## My request:
+JOB J3b. Allowed file: src/semantic_checker.py plus ai_usage.txt. Depends on J3a. No Git commands.
+
+Spec: Task 2's restrictions on unnamed lambda types; avoid changing diagnostics for old constructs.
+
+Lambda values (type starts with "lambda.") cannot be used as ordinary first-class values except synthesized closure initialization or a legal capture:
+- In visit_call and visit_member_call (including rewritten callable calls), for a lambda-valued VarNode argument: error at argument "'{name}' is a lambda and cannot be passed to '{callee}': its type has no name, so no parameter can have it". Callee should be the shown object name / function name, not an internal "call" label.
+- visit_exit, before existing exit checks: "cannot exit with '{name}': it is a lambda, and its type has no name".
+- visit_print, before existing struct printing: "cannot print '{name}': it is a lambda" (position of printed argument).
+- visit_assign, when final assignment target has lambda type: "cannot assign to '{name}': it is a lambda".
+- visit_decl / check_initializer for user declarations, but NOT generated decl with is_closure=True: reject an initializer that is a lambda value with a clear error at that value.
+- Captures cannot be accessed as public fields: in visit_field, assignment field paths, and J1 field-callable rewrite in visit_member_call, reject field access where base is a lambda: "'{field}' is a capture of '{base}' and is not visible outside its body". Lambda's own captured fields inside call() remain available as ordinary this-field VarNodes.
+- A synthesized closure declaration must still accept a captured lambda; [mut name] capture is permitted and should preserve mutability semantics.
+- Do not accidentally reject direct invocation of a lambda variable (e.g. add_k(5)), which must remain valid.
+
+Verify baseline tests; compare Task 2 reference diagnostics and hand-computed line:col: missing capture 19:11; assign to const capture 19:5; duplicate capture 17:17; unknown capture 8:26; lambda as arg 13:14 (4 spaces, no blank lines per sheet). Also check lambda print/exit/assignment/field-access diagnostics. Report any mismatch, don't alter expected files.
+
+Append J3b ai_usage entry and summarize. No Git actions.
+Files changed:
+- src/semantic_checker.py: added expression_label, check_lambda_argument, check_lambda_initializer, check_lambda_assignment; modified visit_call/visit_member_call for lambda argument diagnostics and visible callee labels; visit_exit/visit_print for value restrictions; visit_decl/check_initializer for explicit generated-closure exemption; visit_assign for closure targets, source values, and capture privacy; visit_field and callable-field rewriting for external capture privacy. Existing non-lambda paths and diagnostics retained.
+- ai_usage.txt: appended this J3b entry.
+What I did: Read AGENTS.md and authoritative Task 2/additional-task diagnostic text from the existing docs/w08-practice.pdf extraction. Rejected ordinary uses of lambda values as arguments, exits, printed values, assignment targets/sources, and user initializers. Added recursive initializer validation while allowing synthesized is_closure declarations to capture lambda values. Blocked external capture reads, writes, and field-call rewrites, including captures reached from another lambda, while retaining implicit this-field VarNode access inside the owning body. Preserved direct/explicit lambda calls, captured lambdas, and mutable copies. Added user-facing callee labels for both callable sugar and explicit .call syntax. Preserved CRLF source line endings. Verification fixtures and hand-derived expectations were written only under /tmp/practice8-j3b.
+Kept from existing code (deliberately untouched): Lexer, parser, AST node classes, compiler CLI, src/code_generator.py, all repository tests/.expected/.ast files, existing non-lambda diagnostics, J3a lambda lowering/scope logic and mutation settling, and J2 source positions. Existing usage entries and student review fields left unchanged. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No LLVM generation/execution for lambdas (J3c); no unrelated refactor or dependency installation. Did not change repository expectations or the temporary expectation file with the supplemental line-count mistake to match observed output.
+Needed elsewhere: J3c must generate LLVM for synthesized lambda structs/methods/declarations. No additional source-file changes needed for J3b.
+Verification:
+Environment: source ~/lcd/bin/activate, using the existing Python 3.12.3 and llvmlite 0.49.0.
+Baseline exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j3b-before.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j3b-before.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0.
+Post-source-edit exact shell commands:
+source ~/lcd/bin/activate
+set -o pipefail
+./test.sh > /tmp/practice8-j3b-after.log 2>&1
+rc=$?
+tail -n 8 /tmp/practice8-j3b-after.log
+exit "$rc"
+Result: 82 passed, 0 failed; exit status 0. No baseline regression.
+Targeted exact shell commands:
+source ~/lcd/bin/activate
+python3 /tmp/practice8-j3b/check.py > /tmp/practice8-j3b/check.log 2>&1
+rc=$?
+tail -n 35 /tmp/practice8-j3b/check.log
+exit "$rc"
+This harness completed 27 exact negative-diagnostic comparisons successfully, plus its positive checks, then exited 1 on a supplemental mutable-capture fixture whose hand-written expectation incorrectly used line 12 instead of line 11. The mismatch is documented below; no compiler defect was found there and its original expectation remains unchanged.
+Five required reference diagnostics all match the PDF/user positions and wording (CLI exit 1, exact compilation error prefix):
+- Missing capture at 19:11: 'k' is not captured by lambda 'add_k': add it to the capture list, [k].
+- Assignment to const capture at 19:5: cannot assign to 'k': the capture 'k' is const, write [mut k].
+- Duplicate capture at 17:17: 'k' is captured twice.
+- Unknown capture at 8:26: cannot capture 'k': no variable 'k' is visible here.
+- Lambda argument at 13:14: 'times' is a lambda and cannot be passed to 'sq': its type has no name, so no parameter can have it.
+Additional exact negative checks passed:
+- Print f at 6:7; exit f at 6:6; assign to const/mut closure f at 6:1; reads f.k at 6:7; writes f.k at 6:1; spaced field call f.  k() at 6:11.
+- User built-in initializer f at 6:7, struct initializer at 10:7, nested struct initializer at 14:10, and lambda assignment source at 7:6 reject the value at its own position with clear unnamed-type messages.
+- Exiting a captured closure or accessing its capture inside another lambda at 8:10 is refused; assigning a mutable captured closure itself at 8:5 is refused.
+- Lambda arguments name g at 10:9 (sugar) / 10:14 (explicit .call), callable object c at 15:9 / 15:14, ordinary method use at 15:13, and callable field h.c at 19:11 / 19:16. No internal call label is exposed for callable invocation.
+- External call through a captured lambda field two.one() is rejected at 9:11, naming capture one of two.
+Positive cases checked semantically: unchanged Task 2 sheet; direct f() and explicit f.call(); captured lambda declarations/invocations; multiple captures combining a lambda with a scalar; additional-task [mut next] captured closure with correct mutable field/closure flags and fixed-point mutation propagation. Own captured fields inside call remain usable. No lambda LLVM attempted.
+Prior J3a semantic regression command: source ~/lcd/bin/activate followed by python3 /tmp/practice8-j3a/check.py > /tmp/practice8-j3b/j3a-check.log 2>&1 (preserved exit status and tailed final four lines). Result: exit 0; all prior capture/scope/lowering checks passed.
+Supplemental expectation mismatch: /tmp/practice8-j3b/const-lambda-capture.expected says 12:11; compiler reports 11:11. Independently recounted source with nl -ba /tmp/practice8-j3b/const-lambda-capture.txt and read the PDF additional-task reference: the first next() call is on line 11, column 11; the PDF also specifies 11:11. The expectation was off by one; original file preserved. This was reported in chat and not hidden by changing the expected file or compiler.
+Independent follow-up exact shell commands:
+source ~/lcd/bin/activate
+python3 /tmp/practice8-j3b/positive-check.py
+Result: exit 0. Task 2 sheet, previous closure capture/mutable scalar fixtures, and mutable-closure sheet all pass semantic checking; pending calls clear. Independent source/PDF check confirms the const-captured mutating lambda diagnostic at 11:11 and asserts that the original temporary 12:11 expectation remains untouched.
+Open questions: none. Lambda LLVM generation/execution remains pending J3c.
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: code
+Changed by the student: None
+Removed/rejected by the student: None
