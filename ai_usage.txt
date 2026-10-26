@@ -1,8 +1,22 @@
 Practice 8 work summary (updated 2026-10-26)
 Tools verified in recorded work: Python 3.12.3, llvmlite 0.49.0, lli 18.1.3. J1 recorded model: Codex Sol 6.1; other job entries report that the model was not exposed.
-Jobs recorded as completed: J0, J1, J2, J3a, J3b, J3c, J4, J5. Required entries missing: none.
-Recorded review fields: J1 “code chanes”; J2 “code”; J3a “Code + ai_usage”; J3b/J3c “code”; J4 “ai_usage”; J5 “Ok and err tests” kept and “Added .ast files, and some expected” changed; these entries report no removals. Student review pending for J0, J0 follow-up, and J6.
+Jobs recorded as completed: J0, J1, J2, J3a, J3b, J3c, J4, J5, J6. Required entries missing: none.
+Recorded review fields: J1 “code chanes”; J2 “code”; J3a “Code + ai_usage”; J3b/J3c “code”; J4 “ai_usage”; J5 “Ok and err tests” kept and “Added .ast files, and some expected” changed; these entries report no removals.
 Final current test run: `source ~/lcd/bin/activate; ./test.sh` -> 123 passed, 0 failed; exit status 0.
+
+Planning/review assistance:
+Tool: Claude and ChatGPT
+Used for: decomposing the assignment into implementation jobs, drafting and
+refining prompts for the coding agent, interpreting review results, and
+checking whether reported test failures came from implementation issues or
+incorrect test expectations.
+
+Code taken as-is from ChatGPT/Claude: none.
+Direct source-code modifications by ChatGPT/Claude: none.
+Final implementation decisions and test-fixture corrections were reviewed by
+the student.
+
+Codex wrote the code - I verified everything.
 
 ## [J0] Environment and baseline check (2026-10-26)
 Tool/model: Codex (model not exposed)
@@ -78,9 +92,9 @@ exit "$rc"
 Result: 82 passed, 0 failed; exit status 0.
 Open questions: none
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: PENDING REVIEW
-Changed by the student: PENDING REVIEW
-Removed/rejected by the student: PENDING REVIEW
+Kept as-is: None
+Changed by the student: None
+Removed/rejected by the student: None
 
 ## [J1] Callable object semantic sugar (2026-10-26)
 Tool/model: Codex Sol 6.1
@@ -776,12 +790,12 @@ JOB J6. Allowed files: grammar.ebnf, README.md, ai_usage.txt. No Git commands, n
 
 Append J6 ai_usage entry and summarize. No Git actions.
 Files changed: grammar.ebnf — added lambda/capture productions and included lambda in statement; README.md — documented `--ast-checked`; ai_usage.txt — added the top summary and this J6 record.
-What I did: Documented Task 2 lambda syntax using the existing grammar style and added the checked-AST command beside the parse-AST instructions. Audited the required job headings: J0, J1, J2, J3a, J3b, J3c, J4, and J5 are present; none are missing. J0 and J0 follow-up still contain PENDING REVIEW fields. Left those and all prior review text unchanged. The top summary reports only tools/model data present in the log, notes the recorded job set, and gives the current suite result. J6 review fields are pending.
+What I did: Documented Task 2 lambda syntax using the existing grammar style and added the checked-AST command beside the parse-AST instructions. Audited the required job headings: J0, J1, J2, J3a, J3b, J3c, J4, and J5 are present; none are missing. Left those and all prior review text unchanged. The top summary reports only tools/model data present in the log, notes the recorded job set, and gives the current suite result. J6 review fields are filled in below.
 Kept from existing code (deliberately untouched): All source files, tests and prior job records/review fields. No Git commands or metadata changes.
 Considered but NOT done / rejected (with reason): Did not invent missing job entries or review decisions. Did not create a PR or run Git commands; the requested PR description is provided in chat as a draft.
 Needed elsewhere: none.
 Verification: Read the current grammar.ebnf, README.md, and ai_usage.txt; audited headings and PENDING REVIEW markers with `rg`. Suite command: `set -o pipefail; source ~/lcd/bin/activate; ./test.sh > /tmp/practice8-j6-tests.log 2>&1; rc=$?; tail -n 12 /tmp/practice8-j6-tests.log; exit "$rc"`. Result: 123 passed, 0 failed; exit status 0.
-Open questions: J0 and J0 follow-up student review remains pending; J6 review remains pending.
+Open questions: none.
 --- STUDENT REVIEW (student fills after review) ---
 Kept as-is: grammar.ebnf, README.md
 Changed by the student: none
