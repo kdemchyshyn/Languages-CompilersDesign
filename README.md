@@ -12,6 +12,9 @@ python3 src/compiler.py --tokens input.txt
 ### Print AST
 python3 src/compiler.py --ast input.txt
 
+### Print the AST after the semantic pass
+python3 src/compiler.py --ast-checked input.txt
+
 ### Execute the generated LLVM IR
 llc -filetype=obj -relocation-model=pic output.ll -o output.o<br>
 clang -fPIE output.o -o program <br>
