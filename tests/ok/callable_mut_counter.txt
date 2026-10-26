@@ -1,0 +1,16 @@
+struct Counter
+{
+    i32 mut n
+    fn call := () -> i32
+    {
+        n := n + 1
+        exit n
+    }
+}
+Counter mut c{0}
+i32 a{c()}
+i32 b{c()}
+i32 d{c()}
+print(c)
+i32 result{a * 100 + b * 10 + d}
+exit result

@@ -1,0 +1,10 @@
+if true
+{
+    i32 value{7}
+    fn get := [value]() -> i32
+    {
+        exit value
+    }
+    print(get())
+}
+exit 0

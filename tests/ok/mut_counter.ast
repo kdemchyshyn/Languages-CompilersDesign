@@ -1,0 +1,37 @@
+Program
+  Decl n i32 const
+    Const 0
+  Lambda next -> i32
+    Capture mut n
+    Block
+      Assign n
+        BinOp +
+          Var n
+          Const 1
+      Exit
+        Var n
+  Print
+    Call next
+  Print
+    Call next
+  Lambda twice -> i32
+    Capture mut next
+    Block
+      Decl a i32 const
+        Call next
+      Decl b i32 const
+        Call next
+      Decl r i32 const
+        BinOp +
+          BinOp *
+            Var a
+            Const 10
+          Var b
+      Exit
+        Var r
+  Print
+    Call twice
+  Print
+    Call next
+  Exit
+    Var n

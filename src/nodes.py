@@ -13,6 +13,7 @@ class ProgramNode(Node):
     def __init__(self, line, col, structs, functions, statements, exit_node):
         super().__init__(line, col)
         self.structs = structs
+        self.generated_structs = []
         self.functions = functions
         self.statements = statements
         self.exit = exit_node
@@ -130,6 +131,46 @@ class StringNode(Node):
 
 class StmtNode(Node): pass
 
+class CaptureNode(Node):
+    def __init__(self, line, col, name, mutable):
+        super().__init__(line, col)
+        self.name = name
+        self.mutable = mutable
+
+    def dump(self, indent=0):
+        mut_str = "mut " if self.mutable else ""
+        print("  " * indent + f"Capture {mut_str}{self.name}")
+
+
+class LambdaNode(StmtNode):
+    def __init__(self, line, col, name, captures, params, return_type, body,
+                 name_line, name_col):
+        super().__init__(line, col)
+        self.name = name
+        self.captures = captures
+        self.params = params
+        self.return_type = return_type
+        self.body = body
+        self.name_line = name_line
+        self.name_col = name_col
+        self.struct = None
+        self.decl = None
+
+    def dump(self, indent=0):
+        print("  " * indent + f"Lambda {self.name} -> {self.return_type}")
+        if self.struct is not None:
+            self.struct.dump(indent + 1)
+            self.decl.dump(indent + 1)
+        else:
+            for capture in self.captures:
+                capture.dump(indent + 1)
+            for param in self.params:
+                param.dump(indent + 1)
+            self.body.dump(indent + 1)
+
+    def accept(self, visitor):
+        return visitor.visit_lambda(self)
+
 class DeclNode(StmtNode):
     def __init__(self, line, col, name, type_name, mutable, init):
         super().__init__(line, col)
@@ -228,12 +269,15 @@ class ExprNode(Node):
         self.type = None
 
 class FieldNode(ExprNode):
-    def __init__(self, line, col, base_name, fields, dot_line, dot_col, target=None):
+    def __init__(self, line, col, base_name, fields, dot_line, dot_col, target=None,
+                 name_line=None, name_col=None):
         super().__init__(line, col)
         self.base_name = base_name
         self.fields = fields
         self.dot_line = dot_line
         self.dot_col = dot_col
+        self.name_line = name_line
+        self.name_col = name_col
         self.target = target
         self.decl = None
         self.field_indices = []
@@ -256,12 +300,14 @@ class CallNode(ExprNode):
     def __init__(self, line, col, func_name, args):
         super().__init__(line, col)
         self.func_name = func_name
+        self.sugar = None
         self.args = args
         self.fn_decl = None
         self.widen_args = []
 
     def dump(self, indent=0):
-        print("  " * indent + f"Call {self.func_name}")
+        label = "CallableCall" if self.sugar is not None else "Call"
+        print("  " * indent + f"{label} {self.func_name}")
         for arg in self.args:
             arg.dump(indent + 1)
 
@@ -270,20 +316,27 @@ class CallNode(ExprNode):
 
 
 class MemberCallNode(ExprNode):
-    def __init__(self, line, col, name, target, args, dot_line=None, dot_col=None):
+    def __init__(self, line, col, name, target, args, dot_line=None, dot_col=None,
+                 name_line=None, name_col=None):
         super().__init__(line, col)
         self.name = name
         self.dot_line = dot_line
         self.dot_col = dot_col
+        self.name_line = name_line
+        self.name_col = name_col
         self.target = target #VarNode or FieldNode
         self.args = args
         self.fn_decl = None
         self.widen_args = []
         self.struct_name = None
+        self.callable_label = None
 
     def dump(self, indent=0):
-        print("  " * indent + f"MemberCall {self.name}")
-        self.target.dump(indent + 1)
+        if self.callable_label is not None:
+            print("  " * indent + f"CallableCall {self.callable_label}")
+        else:
+            print("  " * indent + f"MemberCall {self.name}")
+            self.target.dump(indent + 1)
         for arg in self.args:
             arg.dump(indent + 1)
 

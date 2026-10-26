@@ -1,0 +1,1 @@
+compilation error: line 23:7: 'k' is a capture of 'add_k' and is not visible outside its body

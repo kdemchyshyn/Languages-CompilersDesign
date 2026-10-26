@@ -1,0 +1,13 @@
+struct Pair
+{
+    i32 x
+    i32 y
+}
+Pair p{3, 4}
+fn total := [p]() -> i32
+{
+    i32 r{p.x + p.y}
+    exit r
+}
+print(total())
+exit p.x

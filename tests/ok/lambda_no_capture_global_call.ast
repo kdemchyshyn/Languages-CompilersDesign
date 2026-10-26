@@ -1,0 +1,22 @@
+Program
+  Function double -> i32
+    Param x i32
+    Block
+      Decl r i32 const
+        BinOp *
+          Var x
+          Const 2
+      Exit
+        Var r
+  Lambda twice -> i32
+    Param x i32
+    Block
+      Exit
+        Call double
+          Var x
+  Print
+    Call twice
+      Const 6
+  Exit
+    Call twice
+      Const 4

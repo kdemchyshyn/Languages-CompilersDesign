@@ -1,0 +1,32 @@
+Program
+  Decl k i32 mut
+    Const 3
+  Lambda multiply -> i32
+    Capture k
+    Param x i32
+    Block
+      Decl r i32 const
+        BinOp *
+          Var k
+          Var x
+      Exit
+        Var r
+  Lambda plus_one -> i32
+    Capture multiply
+    Param x i32
+    Block
+      Decl r i32 const
+        BinOp +
+          Call multiply
+            Var x
+          Const 1
+      Exit
+        Var r
+  Assign k
+    Const 100
+  Print
+    Call plus_one
+      Const 4
+  Exit
+    Call multiply
+      Const 2

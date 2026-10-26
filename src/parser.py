@@ -2,7 +2,7 @@ from errors import CompileError
 from nodes import (
     ProgramNode, 
     StructNode, FieldDeclNode,
-    FunctionNode, ParamNode, MemberFnNode,
+    FunctionNode, ParamNode, MemberFnNode, CaptureNode, LambdaNode,
     DeclNode, AssignNode, ExitNode, 
     BinOpNode, 
     VarNode, ConstNode, BoolNode, 
@@ -88,7 +88,7 @@ class Parser:
             structs.append(self.parse_struct())
 
         # Loop 2: Parse function declarations
-        while self.toks and self.peek().kind == "keyword" and self.peek().text == "fn":
+        while self.toks and self.peek().kind == "keyword" and self.peek().text == "fn" and not self.is_lambda_start():
             functions.append(self.parse_fn())
 
         while self.toks:
@@ -98,7 +98,7 @@ class Parser:
             tok = self.peek()
             if tok.kind == "keyword" and tok.text == "struct":
                 self.error("struct declaration is not allowed after functions or statements")
-            elif tok.kind == "keyword" and tok.text == "fn":
+            elif tok.kind == "keyword" and tok.text == "fn" and not self.is_lambda_start():
                 self.error("function declaration is not allowed after statements")
             elif tok.kind == "keyword" and tok.text == "exit":
                 exit_node = self.parse_exitStmt()
@@ -183,6 +183,15 @@ class Parser:
         name = self.expect("ident", "function name")
         
         self.expect("assign", "':='")
+        if is_member and self.peek() is not None and self.peek().kind == "lbracket":
+            self.error("a capture list is only allowed on a lambda, not on a member function")
+        params, ret_type, body = self.parse_signature_tail()
+
+        if is_member:
+            return MemberFnNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
+        return FunctionNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
+
+    def parse_signature_tail(self):
         self.expect("lparen", "'('")
         
         params = []
@@ -224,14 +233,42 @@ class Parser:
         if body.exit is None:
             raise CompileError(f"line {body.line}:{body.col}: function block must end with an exit statement")
 
-        if is_member:
-            return MemberFnNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
-        return FunctionNode(tok_fn.line, tok_fn.col, name.text, ret_type, params, body)
+        return params, ret_type, body
+
+    def is_lambda_start(self):
+        return (len(self.toks) > 3 and self.toks[0].kind == "keyword"
+                and self.toks[0].text == "fn" and self.toks[3].kind == "lbracket")
+
+    def parse_lambda(self):
+        tok_fn = self.eat() # Eat "fn"
+        name = self.expect("ident", "function name")
+        self.expect("assign", "':='")
+        self.expect("lbracket", "'['")
+        captures = []
+        if self.peek() is not None and self.peek().kind != "rbracket":
+            while True:
+                mutable = False
+                if self.peek() is not None and self.peek().text == "mut":
+                    self.eat()
+                    mutable = True
+                capture = self.expect("ident", "capture name")
+                captures.append(CaptureNode(capture.line, capture.col, capture.text, mutable))
+                if self.peek() is not None and self.peek().kind == "coma":
+                    self.eat()
+                else:
+                    break
+        self.expect("rbracket", "']'")
+        params, ret_type, body = self.parse_signature_tail()
+        return LambdaNode(tok_fn.line, tok_fn.col, name.text, captures, params,
+                          ret_type, body, name.line, name.col)
 
     def parse_statement(self):
         tok = self.peek()
         if tok is None:
             self.error("expected a statement, found end of line")
+
+        if tok.kind == "keyword" and tok.text == "fn" and self.is_lambda_start():
+            return self.parse_lambda()
 
         if tok.kind == "keyword" and tok.text in ("struct", "fn"):
             self.error("function/struct declaration is not allowed after statements or inside a block")
@@ -532,9 +569,11 @@ class Parser:
                     # It's a member call!
                     if field_Chain:
                         if isinstance(node, VarNode):
-                            node = FieldNode(node.line, node.col, node.name, field_Chain, dot_tok.line, dot_tok.col)
+                            node = FieldNode(node.line, node.col, node.name, field_Chain, dot_tok.line, dot_tok.col,
+                                             name_line=last_field.line, name_col=last_field.col)
                         else:
-                            node = FieldNode(node.line, node.col, None, field_Chain, dot_tok.line, dot_tok.col, target=node)
+                            node = FieldNode(node.line, node.col, None, field_Chain, dot_tok.line, dot_tok.col, target=node,
+                                             name_line=last_field.line, name_col=last_field.col)
                         field_Chain = []
                     self.eat() # Eat "("
                     
@@ -546,19 +585,24 @@ class Parser:
                             args.append(self.parse_expr())
                     self.expect("rparen", "')'")
                     
-                    node = MemberCallNode(node.line, node.col, ident_tok.text, node, args, last_dot.line, last_dot.col)
+                    node = MemberCallNode(node.line, node.col, ident_tok.text, node, args,
+                                          last_dot.line, last_dot.col,
+                                          name_line=ident_tok.line, name_col=ident_tok.col)
                     break # exit inner loop; outer loop checks if another "." follows ")"
                 else:
                     field_Chain.append(ident_tok.text)
+                    last_field = ident_tok
                     if self.peek() is not None and self.peek().kind == "dot":
                         last_dot = self.eat() # Eat "." and continue reading field_Chain
                     else:
                         break
             if field_Chain:
                 if isinstance(node, VarNode):
-                    node = FieldNode(node.line, node.col, node.name, field_Chain, dot_tok.line, dot_tok.col)
+                    node = FieldNode(node.line, node.col, node.name, field_Chain, dot_tok.line, dot_tok.col,
+                                             name_line=last_field.line, name_col=last_field.col)
                 else:
-                    node = FieldNode(node.line, node.col, None, field_Chain, dot_tok.line, dot_tok.col, target=node)
+                    node = FieldNode(node.line, node.col, None, field_Chain, dot_tok.line, dot_tok.col, target=node,
+                                             name_line=last_field.line, name_col=last_field.col)
 
         return node
 

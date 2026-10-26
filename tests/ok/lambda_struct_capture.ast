@@ -1,0 +1,20 @@
+Program
+  Struct Pair
+    Member x i32 const
+    Member y i32 const
+  Decl p Pair const
+    Const 3
+    Const 4
+  Lambda total -> i32
+    Capture p
+    Block
+      Decl r i32 const
+        BinOp +
+          Field p.x
+          Field p.y
+      Exit
+        Var r
+  Print
+    Call total
+  Exit
+    Field p.x

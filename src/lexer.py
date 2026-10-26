@@ -54,6 +54,8 @@ def lex(data: bytes):
             elif b == ord(","): tokens.append(Token("coma", ",", line, col))
             elif b == ord("("): tokens.append(Token("lparen", "(", line, col))
             elif b == ord(")"): tokens.append(Token("rparen", ")", line, col))
+            elif b == ord("["): tokens.append(Token("lbracket", "[", line, col))
+            elif b == ord("]"): tokens.append(Token("rbracket", "]", line, col))
             elif b == ord('"'): state, start, start_col = "STRING", i, col
             else: raise CompileError(f"line {line}:{col}: unexpected byte {repr(chr(b))}")
         elif state == "IDENT":

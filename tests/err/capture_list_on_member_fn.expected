@@ -1,0 +1,1 @@
+compilation error: line 4:13: a capture list is only allowed on a lambda, not on a member function
