@@ -1,802 +1,149 @@
-Practice 8 work summary (updated 2026-10-26)
-Tools verified in recorded work: Python 3.12.3, llvmlite 0.49.0, lli 18.1.3. J1 recorded model: Codex Sol 6.1; other job entries report that the model was not exposed.
-Jobs recorded as completed: J0, J1, J2, J3a, J3b, J3c, J4, J5, J6. Required entries missing: none.
-Recorded review fields: J1 “code chanes”; J2 “code”; J3a “Code + ai_usage”; J3b/J3c “code”; J4 “ai_usage”; J5 “Ok and err tests” kept and “Added .ast files, and some expected” changed; these entries report no removals.
-Final current test run: `source ~/lcd/bin/activate; ./test.sh` -> 123 passed, 0 failed; exit status 0.
+# AI usage log
 
-Planning/review assistance:
-Tool: Claude and ChatGPT
-Used for: decomposing the assignment into implementation jobs, drafting and
-refining prompts for the coding agent, interpreting review results, and
-checking whether reported test failures came from implementation issues or
-incorrect test expectations.
+Repository instructions (AGENTS.md; recorded once):
 
-Code taken as-is from ChatGPT/Claude: none.
-Direct source-code modifications by ChatGPT/Claude: none.
-Final implementation decisions and test-fixture corrections were reviewed by
-the student.
+# Codex repository instructions — Practice 9
 
-Codex wrote the code - I verified everything.
+## Project
+- Python compiler for a small language, generating LLVM IR via `llvmlite.ir`.
+- Source files in `src/`; test suite: `./test.sh`, using `tests/ok` and `tests/err`.
+- Historical baseline: **123 passed, 0 failed**. Measure the actual baseline before changes.
+- Authoritative specification: `docs/CS400_Practice_9.pdf` (verify that the file exists at this path in the actual repository). `docs/w08-practice.pdf` is background only.
+- Practice 9: Task 1 remove unused variables per declaration until stable; Task 2 remove unused global functions until stable; Task 3 add optimization tests and memory note; optional additional task analyze calls without observable effects. The optimizer transforms the checked AST, never generated LLVM IR.
+- Previous practices must keep working with identical output and error messages.
 
-## [J0] Environment and baseline check (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
+## Absolute Git restriction
+**Never run any Git command and never modify Git metadata.** This includes `git status`, `git diff`, `git log`, `git add`, `git commit`, `git checkout`, `git switch`, branch creation, merges, rebases, resets, tags, or touching `.git/` or `.git/info/exclude`. Do not automatically create commits, branches, PRs, or change remotes. The student handles ALL Git operations and reviews manually. To report edits, describe files/functions without Git commands.
 
-## Active file: src/compiler.py
+## Implementation rules
+1. Perform **only the current job**. Change only its expressly allowed files, plus `ai_usage.txt` for its entry. If another file needs an edit, report it under `Needed elsewhere`; do not change it.
+2. Generate LLVM IR only through `llvmlite.ir`; never assemble IR by concatenating textual LLVM instructions (printing `str(module)` is fine).
+3. Keep pre-existing compiler error wording, `--ast` output for existing nodes, and existing test behavior unchanged. Do not edit or regenerate existing `.expected`, `.ast`, or source tests to make a failure disappear.
+4. If the specification is materially ambiguous or contradicts these instructions, stop the affected work and ask for clarification. Do not silently invent language behavior.
+5. Derive new test expected outputs and error positions **by hand** from the program and spec before comparing with the compiler; never copy observed compiler output into `.expected`. On a discrepancy, report it; do not change the expected result to match a bug.
+6. Follow the existing code style and name conventions. Make minimal, relevant changes.
+7. Save context where practical: locate target functions with `rg -n`, then inspect relevant ranges, imports, and call sites; widen reading only when necessary to understand the change. Never sacrifice correctness for token savings. Keep chat summaries short.
+8. Source edits are allowed, test runs and file reads are allowed. Destructive shell operations or unrelated cleanup are not. Do not install dependencies without asking.
+9. Avoid claims about the student's review decisions. The student alone determines what was accepted, changed, or rejected.
 
-## Open tabs:
-- compiler.py: src/compiler.py
-- ai_usage.txt: ai_usage.txt
-- AGENTS.md: AGENTS.md
+## Testing
+- Before a job, run the existing suite and record actual totals; after editing, run it again.
+- Prefer Bash: `set -o pipefail; ./test.sh > /tmp/practice9-tests.log 2>&1; rc=$?; tail -n 8 /tmp/practice9-tests.log; exit "$rc"`. This preserves failure status and only prints a short tail. If the project uses another shell, use an equivalent command that preserves the exit status.
+- When something fails, read only the relevant sections of the log; distinguish pre-existing failures from regressions. Fix regressions only within the job's authorized files; otherwise stop and report.
+- For P9-J1, failing new optimization tests are intentional TDD red tests, but the existing `tests/ok` and `tests/err` must remain green, both with and without `REMOVE_UNUSED=1`. Report new red tests separately; never conceal a regression.
+- For P9-J2 onward, new tests relevant to the completed stages must turn green. Verify that `--remove-unused` does not change stdout, errors, or program exit status.
+- For P9-J5, the optional effect analysis might change optimized AST snapshots. Do not silently rewrite earlier `.astc` fixtures; explain any incompatibility and identify a minimal correction or test redesign for student review.
 
-## My request:
-JOB J0. Allowed file: ai_usage.txt. No source changes. No Git commands or Git metadata changes.\
-\
-1\. Read AGENTS.md and verify docs/w08-practice.pdf is accessible. Identify essential tools (python3, lli, llvmlite), without installing anything.\
-2\. Run ./test.sh and record actual baseline totals and its exit status; report any difference from 82 passed / 0 failed.
+## `ai_usage.txt` — required close-out for every job
+- Append **one** entry to `ai_usage.txt` before finishing, unless the job explicitly says to only update an earlier review entry.
+- Use the **exact prompt text provided by the student**, including the job body, in `Prompt (verbatim)`. Do not reproduce this `AGENTS.md` as part of every prompt; its contents belong in the header once.
+- Log the actual model only if known; otherwise say `Codex (model not exposed)` rather than guessing.
+- Entry format:
 
-3. Check ai_usage.txt is accessible\
-   \
-   Finish with the standard AGENTS.md close-out.\
-   Do not branch, stage, commit, or execute any Git command.
-Files changed: ai_usage.txt — appended this J0 entry; no functions/classes changed.
-What I did: Read AGENTS.md; verified the PDF is readable (header %PDF-1.7) and ai_usage.txt is readable; identified /usr/bin/python3 (3.12.3) and /usr/bin/lli (Ubuntu LLVM 18.1.3); checked llvmlite import; ran the existing suite.
-Kept from existing code (deliberately untouched): All source files, tests, expected outputs, and repository instructions.
-Considered but NOT done / rejected (with reason): No dependency installation (not authorized); no source changes (outside J0 scope); no Git commands or metadata changes.
-Needed elsewhere: llvmlite must be made available to the python3 used by test.sh before a functional compiler baseline can be measured; no installation performed.
-Verification: Read/check commands: pwd; cat AGENTS.md; ls -l docs/w08-practice.pdf ai_usage.txt; command -v python3; command -v lli; python3 -c 'import sys, llvmlite; print("Python:", sys.version.split()[0]); print("llvmlite:", llvmlite.__version__)' (import failed: ModuleNotFoundError: No module named 'llvmlite'). Also: sed -n '1,180p' test.sh; python3 --version; lli --version; python3 -c 'from pathlib import Path; p=Path("docs/w08-practice.pdf"); print("PDF readable:", p.open("rb").read(8)); print("ai_usage.txt readable:", Path("ai_usage.txt").read_text() == "")'. Baseline command: set -o pipefail; ./test.sh > /tmp/practice8-tests.log 2>&1; rc=$?; tail -n 8 /tmp/practice8-tests.log; exit "$rc"
-Baseline result: 0 passed, 82 failed; exit status 1. Difference from historical 82 passed / 0 failed: 82 fewer passes and 82 more failures. Inspected failure excerpts using sed -n '1,24p' /tmp/practice8-tests.log; missing llvmlite prevents compiler startup. Post-entry verification command: set -o pipefail; ./test.sh > /tmp/practice8-tests-after.log 2>&1; rc=$?; tail -n 8 /tmp/practice8-tests-after.log; exit "$rc". Result: 0 passed, 82 failed; exit status 1; same missing llvmlite error. No regression from the measured baseline.
-Open questions: none
+```text
+## [JOB-ID] Title (YYYY-MM-DD)
+Tool/model: ...
+Prompt (verbatim): ...
+Files changed: <per file, functions/classes added or modified>
+What I did: ...
+Kept from existing code (deliberately untouched): ...
+Considered but NOT done / rejected (with reason): ...
+Needed elsewhere: ... or none
+Verification: <exact commands, totals, relevant output>
+Open questions: ... or none
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: none
-Changed by the student: none
-Removed/rejected by the student: none
+Kept as-is: PENDING REVIEW
+Changed by the student: PENDING REVIEW
+Removed/rejected by the student: PENDING REVIEW
+```
 
-## [J0 follow-up] Baseline in the existing virtual environment (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
+- Do not fill or alter `STUDENT REVIEW` fields based on your own assumptions. You may update them **only** if the student explicitly gives you evidence and instructions for the specific review job; otherwise leave `PENDING REVIEW`.
+- **Never run Git in any close-out step.** Finish with a concise changed-files summary, test totals, and any blockers. The student inspects changes and commits personally.
 
-## Active file: src/compiler.py
 
-## Open tabs:
-- compiler.py: src/compiler.py
-- ai_usage.txt: ai_usage.txt
-- AGENTS.md: AGENTS.md
-
-## My request:
-Try work in run:
-source ~/lcd/bin/activate
-./test.sh
-Files changed: ai_usage.txt — appended this follow-up entry; no functions/classes changed.
-What I did: Activated the existing ~/lcd environment in the test shell, confirmed Python 3.12.3 and llvmlite 0.49.0, and ran the suite.
-Kept from existing code (deliberately untouched): All source files, tests, expected outputs, instructions, and prior usage entry.
-Considered but NOT done / rejected (with reason): Dependency installation was unnecessary; source changes were outside scope. No Git commands or Git metadata changes.
-Needed elsewhere: none; use source ~/lcd/bin/activate before running the suite.
-Verification: Exact initial shell commands:
-source ~/lcd/bin/activate
-python3 --version
-python3 -c 'import llvmlite; print("llvmlite:", llvmlite.__version__)'
-set -o pipefail
-./test.sh > /tmp/practice8-tests-venv.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-tests-venv.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Matches historical baseline exactly. The earlier failure was specific to the unactivated Python environment.
-Post-edit verification: exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-tests-venv-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-tests-venv-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Open questions: none
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: None
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J1] Callable object semantic sugar (2026-10-26)
-Tool/model: Codex Sol 6.1
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/compiler.py
-
-## Open tabs:
-- compiler.py: src/compiler.py
-- ai_usage.txt: ai_usage.txt
-- AGENTS.md: AGENTS.md
-
-## My request:
-JOB J1. Allowed files: src/nodes.py, src/semantic_checker.py, src/code_generator.py, plus ai_usage.txt. No Git commands.
-
-Spec: Task 1 of docs/w08-practice.pdf. This is semantic sugar; parser stays untouched.
-
-nodes.py:
-- CallNode: set self.sugar = None in __init__. In dump, show "CallableCall <func_name>" when sugar is non-None, otherwise preserve "Call <func_name>"; dump args in both cases, never the rewritten target.
-- MemberCallNode: set self.callable_label = None in __init__. If set, dump "CallableCall <label>" and args only; otherwise preserve current output exactly.
-
-semantic_checker.py:
-- find_variable(name) -> type name or None, no errors/side effects: lookup_local then current_struct.fields, same ordering as visit_var.
-- function_visible(name): global function, or current struct method except when current struct is a lambda (use getattr(..., "is_lambda", False) until J3a).
-- require_callable(node, label, type_name): built-in i32/i64/bool -> "'{label}' is not callable: it is {type_name}"; struct without method call -> "'{label}' is not callable: {type_name} has no member function 'call'".
-- visit_callable(node): create VarNode(line, col, func_name), visit and require callable, create MemberCallNode(line, col, target, "call", args), set its callable_label, visit it, assign node.sugar and node.type, return type.
-- At start of visit_call: if find_variable(func_name) exists, report collision when function_visible is true ("'{name}' is both a variable and a function: rename one of them"), otherwise visit_callable; keep prior path unchanged.
-- In visit_member_call just after target_type = node.target.accept(self), if node.name names a FIELD of that struct, rewrite obj.name(args) to obj.name.call(args):
-  * VarNode -> FieldNode with base_name and [node.name], preserving source/dot positions;
-  * FieldNode with base_name -> append node.name to fields;
-  * FieldNode with target -> append field preserving target;
-  * CallNode/MemberCallNode target -> FieldNode with target and [node.name].
-  Set callable_label to dotted variable/field path or simply field name for call-result bases; set node.name = "call"; replace target; re-visit target; require_callable. Leave the rest of the existing argument/type/mutation logic unchanged.
-- Only for callable_label, wrong-argument-count message should name that callable object. In verify_member_call_mutation use "cannot call '{label}': its 'call' changes it, and it is not mut" when appropriate. Existing normal member errors must be unchanged. Errors at the call-name position.
-
-code_generator.py:
-- First in visit_call: if getattr(node, "sugar", None) is not None: return node.sugar.accept(self). No other code-generation changes.
-
-Verify: baseline tests; Task 1 sheet program via lli outputs 42, 42, 14, 10, Counter{n: 2}, "Program exit with result 12"; --ast (parse tree) still displays "Call triple"; check the two IR calls generated by triple(14) vs triple.call(14), ignoring SSA numbers; manually check four errors (missing call, i32 call, name collision, const Counter mutating) and line:col. Report existing tests that would now have name collisions; do not edit them.
-
-Append the J1 ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/nodes.py: CallNode.__init__/dump and MemberCallNode.__init__/dump; added sugar/callable_label defaults and checked-tree callable dumps without rewritten targets.
-- src/semantic_checker.py: added find_variable, function_visible, require_callable, visit_callable; modified visit_call, visit_member_call, verify_member_call_mutation for callable dispatch, field rewrites, collisions, labeled arity/mutation diagnostics, and called-field positions derived from the dot.
-- src/code_generator.py: visit_call delegates to node.sugar when present; no other code-generation changes.
-- ai_usage.txt: appended this J1 entry.
-What I did: Read AGENTS.md and Task 1 of the authoritative PDF. Since pdftotext was unavailable, extracted/decompressed the PDF's existing text streams and decoded their embedded character maps with a temporary standard-library Python script; installed nothing. Implemented semantic rewrites using the existing MemberCallNode constructor's actual name-before-target signature. Preserved CRLF source line endings. Wrote hand-derived verification fixtures and expected diagnostics under /tmp/practice8-j1 before comparing compiler output. Checked parse-tree and semantic-tree dumps, both requested IR calls, four requested errors, all four field/call-result rewrite paths and widening, extra primitive/arity diagnostics, and existing-test collisions.
-Kept from existing code (deliberately untouched): Parser, lexer, compiler CLI, all repository tests and expected/AST files, existing normal function/member-call paths and messages, argument type checking, mutation propagation and path checks, and all other code generation. No Git commands or Git metadata changes.
-Considered but NOT done / rejected (with reason): No lambda implementation (later jobs); no dependency installation (existing ~/lcd environment suffices); no new repository tests (not allowed for J1). Did not change expected output to accommodate a discrepancy. Temporary verification harness initially assumed CompileError was an exception and initially used an unsupported compound exit expression; corrected only that harness/fixture, without changing compiler behavior or the hand-derived diagnostic expectation.
-Needed elsewhere: src/parser.py would need to retain the called member identifier's line/column to give exact positions with whitespace after a dot. It currently stores receiver and dot positions only. Callable field errors use dot_col + 1, correct for contiguous dot/name. Confirmed discrepancy: print(s.  side()) on sheet line 34 should report 34:11, but reports 34:9. Parser remains untouched as expressly required; no source-reading workaround introduced.
-Verification:
-All compiler/test commands below used source ~/lcd/bin/activate (Python 3.12.3, llvmlite 0.49.0; lli 18.1.3).
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j1-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j1-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j1-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j1-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No baseline regression.
-Sheet commands: python3 src/compiler.py /tmp/practice8-j1/sheet.txt /tmp/practice8-j1/sheet.ll; lli /tmp/practice8-j1/sheet.ll > /tmp/practice8-j1/sheet.actual; cmp /tmp/practice8-j1/sheet.expected /tmp/practice8-j1/sheet.actual; python3 src/compiler.py --ast /tmp/practice8-j1/sheet.txt > /tmp/practice8-j1/sheet.ast; rg -n 'Call triple|Scale_call' /tmp/practice8-j1/sheet.ast /tmp/practice8-j1/sheet.ll.
-Sheet output exactly: 42, 42, 14, 10, Counter{n: 2}, Program exit with result 12 (one per line). Parse-tree AST contains Call triple. Both IR calls normalize to: call i32 @"Scale_call"(%"Scale"* %"triple", i32 14).
-Harness commands: python3 /tmp/practice8-j1/check.py > /tmp/practice8-j1/check.log 2>&1; python3 /tmp/practice8-j1/extra-check.py. Both corrected harnesses exit 0. CLI checks validate exit status 1 and exact diagnostic including compilation error prefix:
-- missing call: line 6:6: 'p' is not callable: Point has no member function 'call'
-- i32: line 2:6: 'n' is not callable: it is i32
-- collision: line 6:6: 'twice' is both a variable and a function: rename one of them
-- const Counter: line 11:6: cannot call 'c': its 'call' changes it, and it is not mut
-Additional checks: callable arity at 32:7 names triple; field arity at 34:9 names s.scale; i32 field at 34:9 names s.side; bool/i64 objects produce the requested built-in diagnostics. Existing tests encountering new name collisions: none. Checked semantic dumps show CallableCall for triple, s.scale, scale and c, while explicit .call retains MemberCall call.
-Path commands: python3 src/compiler.py /tmp/practice8-j1/paths.txt /tmp/practice8-j1/paths.ll; lli /tmp/practice8-j1/paths.ll > /tmp/practice8-j1/paths.actual; cmp /tmp/practice8-j1/paths.expected /tmp/practice8-j1/paths.actual. Result: 12, 15, 18, 21, Program exit with result 0, covering a nested variable field, function-result field, member-result field, and field on a call-result field with i32-to-i64 argument widening.
-Known-position-limitation command: python3 src/compiler.py /tmp/practice8-j1/spaced-field.txt /tmp/practice8-j1/spaced-field.ll. Exit status 1; expected 34:11 but observed 34:9; recorded under Needed elsewhere rather than changing the expectation.
-Open questions: Exact called-field positions after whitespace require parser metadata outside J1's allowed scope.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code chanes
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J2] Lambda syntax and exact callable-field positions (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/code_generator.py
-
-## Open tabs:
-- code_generator.py: src/code_generator.py
-
-## My request:
-JOB J2. Allowed files: src/lexer.py, src/nodes.py, src/parser.py, src/compiler.py, src/semantic_checker.py, plus ai_usage.txt. No Git commands.
-
-Spec: Task 2 syntax in docs/w08-practice.pdf.
-
-IMPORTANT J1 COMPATIBILITY FIX:
-A minor diagnostic-position bug remains from J1 and should be fixed as part of this job because J2 already modifies parser/AST metadata.
-
-Currently callable-field rewriting in semantic_checker.py derives the member/call-name column as dot_col + 1. This is wrong when whitespace appears after '.', e.g. `s.  side()`: if `side` starts at column 11, the diagnostic may incorrectly report column 9.
-
-Fix this properly using parser/AST source metadata:
-- Preserve the actual source position (line/column) of the member identifier when parsing member access/calls.
-- Use that preserved member-name position in semantic_checker.py when a callable field/member call is rewritten and its diagnostic location is needed.
-- Do NOT derive the identifier position from dot_col + 1.
-- Preserve all existing behavior for ordinary member calls and J1 callable-field rewriting.
-- Verify at minimum that a callable-field diagnostic for `s.  side()` points to the actual start of `side`, not the position immediately after '.'.
-- Also check multiple spaces and, if naturally supported by the lexer/parser, tabs after '.'.
-- Keep this fix narrowly scoped. Do not otherwise redesign or refactor J1.
-
-lexer.py:
-- In START add '[' as Token("lbracket", "[", line, col) and ']' as Token("rbracket", "]", line, col), matching parentheses.
-- Check whether an existing error test depends on '[' or ']' being an unexpected byte; report, do not change the test.
-
-nodes.py:
-- CaptureNode(Node): fields (line, col, name, mutable); source position is identifier, not mut; dump "Capture k" / "Capture mut k".
-- LambdaNode(StmtNode), defined after StmtNode: (line, col, name, captures, params, return_type, body, name_line, name_col); fields struct=None, decl=None; accept via visitor.visit_lambda(self).
-- Dump "Lambda <name> -> <return_type>"; before checking dump captures, params, body; after checking dump its synthesized struct and decl at indent+1 (as in spec).
-- ProgramNode.generated_structs = []; do not print in ProgramNode.dump.
-
-parser.py:
-- First refactor parse_fn by extracting parse_signature_tail(), beginning at '(' and handling params, ')', '->', return type, end-of-line, '{' on its own line, parse_block("fn"), and required final exit. Return (params, return_type, body). Preserve all prior messages.
-- is_lambda_start(): len(self.toks) > 3, first token keyword "fn", fourth token kind "lbracket".
-- parse_program: exclude lambda starts from the ordinary function loop, permit lambda starts as statements, retain existing error for normal function declaration after statements.
-- parse_statement: when fn+lambda start, call parse_lambda (consumes lines); otherwise old error.
-- parse_lambda: fn, name (with existing reserved-name check), ':=', '[', zero or more captures (optional 'mut', identifier, commas), ']', parse_signature_tail; construct LambdaNode with both name coordinates.
-- parse_fn(is_member=True): '[' after ':=' raises at that token "a capture list is only allowed on a lambda, not on a member function".
-- While touching member parsing, preserve the actual member identifier source coordinates needed by the J1 compatibility fix above. Do not approximate them from the dot position.
-
-semantic_checker.py:
-- Only modify what is necessary for the J1 diagnostic-position compatibility fix described above.
-- In particular, update callable-field/member-call rewriting to use the actual preserved member identifier position rather than dot_col + 1.
-- Do not make unrelated semantic changes and do not implement J3 functionality here.
-
-compiler.py:
-- Add --ast-checked flag.
-- After ordinary --ast early-exit and before checking for required output filename, execute SemanticChecker().visit_program(program), program.dump(), and exit 0.
-- Keep --ast behavior unchanged.
-
-VERIFY:
-1. Run the baseline test suite and report exact passed/failed counts.
-2. Parse AST for the Task 2 sheet program and verify Lambda, Capture, Param, and Block structure.
-3. Verify unchanged rejection of `fn f := (...)` inside a block.
-4. Verify the J1 callable-field diagnostic position with whitespace after '.', specifically a case such as `s.  side()`. The reported position must be the actual start of `side`.
-5. Check that ordinary member-call diagnostics/behavior remain unchanged.
-6. Full --ast-checked of lambda programs is NOT expected to work until J3a/J3b; report that honestly, not as an existing-test regression.
-
-If an existing error test depends on '[' or ']' being an unexpected byte, report it but DO NOT modify that test.
-
-Append a J2 ai_usage entry describing:
-- Task 2 changes,
-- the J1 diagnostic-position compatibility fix,
-- tests/verification performed,
-- any known limitations.
-
-Summarize changed files, verification results, and any remaining issues.
-
-No Git commands.
-Files changed:
-- src/lexer.py: lex START recognizes lbracket/rbracket at their actual source positions.
-- src/nodes.py: added CaptureNode and LambdaNode constructors/dumps and LambdaNode.accept; ProgramNode.__init__ initializes generated_structs (not dumped); FieldNode and MemberCallNode constructors retain optional name_line/name_col metadata without altering existing dump output.
-- src/parser.py: extracted parse_signature_tail from parse_fn without changing prior signature/body errors; added is_lambda_start and parse_lambda; updated parse_program/parse_statement to accept lambdas as statements; parse_fn rejects member capture lists at '['; member access/call parsing stores actual final member identifier coordinates.
-- src/compiler.py: added --ast-checked argument and early checked-tree dump path after --ast and before the required output check.
-- src/semantic_checker.py: visit_member_call only; replaced dot-based position approximation with preserved name_line/name_col for callable-field rewrites and retained that metadata on the synthesized field target. No lambda semantics or other J1 redesign.
-- ai_usage.txt: appended this J2 entry.
-What I did: Read AGENTS.md and Task 2 syntax/rewrite text from the authoritative PDF extraction produced during J1 (the PDF remains accessible). Implemented syntax-only lambda parsing including empty/multiple/mut captures, parameter lists, required final exit, and nesting in all statement contexts. Capture coordinates identify the captured identifier rather than mut. Lambda dumps use captures/params/body before semantic rewriting, or struct/decl once those fields are supplied. Fixed the J1 whitespace diagnostic bug using parser-provided identifier coordinates. Preserved CRLF source line endings. Created only temporary verification fixtures/harnesses under /tmp/practice8-j2, with expected AST fragments and errors/positions derived by hand before comparisons.
-Kept from existing code (deliberately untouched): src/code_generator.py; all repository tests, .expected and .ast files; existing --ast parse-tree early exit; ordinary function/member signature parsing wording; ordinary member-call diagnostic positions and behavior; argument and mutation logic; all other semantic behavior. Previous usage entries and student review fields left unchanged. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No visit_lambda semantic checking/synthesis, lambda execution/code generation, capture validation, or other J3 work (explicitly deferred). No dependency installation. No changes to existing tests, including bracket-related expectations. Search found no existing error test depending on '[' or ']' being an unexpected byte.
-Needed elsewhere: J3a/J3b must implement lambda semantic checking and synthesis before lambda --ast-checked can succeed; later lambda code generation is also outside J2. The J1 whitespace-position limitation is resolved in this job.
-Verification:
-Environment: source ~/lcd/bin/activate; existing Python 3.12.3 and llvmlite 0.49.0; lli 18.1.3. No installation.
-Bracket dependency check command: rg -n '\[|\]' tests/err/*.txt tests/err/*.expected (no matches).
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j2-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j2-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0, matching historical baseline.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j2-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j2-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No existing-test regression.
-Targeted verification exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j2/check.py > /tmp/practice8-j2/check.log 2>&1
-rc=$?
-tail -n 24 /tmp/practice8-j2/check.log
-exit "$rc"
-Result: exit status 0; all targeted checks passed. The harness invokes src/compiler.py via the activated interpreter and checks return codes, hand-derived AST fragments, and exact diagnostics. Task 2 sheet AST is in /tmp/practice8-j2/sheet.ast. Verified Lambda times nested inside sum_scaled with Capture factor, Param v i32, Block, expected expression tree; top-level Lambda add_k with Capture k, Param y i32, Block. Verified times name/capture positions 8:8 / 8:18 and add_k 17:4 / 17:14. Mutable capture k in the separate fixture is at 1:14 (identifier, not mut). Empty/multiple captures and multiple parameters parse. Lambdas parse inside a function, member, if, while, and another lambda. Verified checked LambdaNode dump using supplied existing AST nodes, visitor dispatch, bracket token positions, and generated_structs omission from ProgramNode.dump.
-Exact CLI diagnostic checks (all exit 1, with unchanged compilation error prefix):
-- Ordinary fn in a block: 3:5, function/struct declaration is not allowed after statements or inside a block.
-- Ordinary fn after lambda statements: 5:1, function declaration is not allowed after statements.
-- Member capture list: 4:13, a capture list is only allowed on a lambda, not on a member function.
-- Reserved lambda name print: 1:4; reserved capture read after mut: 1:14; both retain built-in-name rejection.
-- Lambda missing final exit: 2:1, function block must end with an exit statement.
-- Callable i32 field print(s.  side()): 10:11, 's.side' is not callable: it is i32. Five spaces -> 10:14; tab -> 10:10; mixed space/tab -> 10:13, matching lexer source-column accounting. Also verified field access metadata itself.
-- Ordinary missing method after two spaces remains at receiver position 10:7; ordinary wrong method arity remains at 10:7; primitive member error remains at dot position 2:8.
-- Existing J1 sheet --ast-checked succeeds without an output filename and retains CallableCall triple/s.scale. Combined --ast --ast-checked on the lambda sheet still prints the parse tree and exits 0, preserving --ast precedence.
-- Lambda sheet --ast-checked exits nonzero with AttributeError for missing visit_lambda; expected at this intermediate syntax-only stage. Captured stderr: /tmp/practice8-j2/sheet.checked.stderr. This is not an existing-test regression.
-Additional inline Python subprocess verification in the activated environment compiled /tmp/practice8-j2/j1-spaced-sheet.txt to /tmp/practice8-j2/j1-spaced-sheet.ll, executed lli, and compared against the hand-derived J1 sheet output: 42, 42, 14, 10, Counter{n: 2}, Program exit with result 12. This program uses multiple spaces on callable-field/ordinary-method calls and a tab on the explicit .call. It retains all six output lines. Recompiled the exact prior J1 discrepancy fixture /tmp/practice8-j1/spaced-field.txt; now reports line 34:11, matching its original hand-derived expectation (previously 34:9).
-Open questions: none; full lambda checking/execution remains intentionally deferred to later jobs.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J3a] Lambda semantics and lowering (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/semantic_checker.py
-
-## Open tabs:
-- semantic_checker.py: src/semantic_checker.py
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-- lexer.py: src/lexer.py
-- compiler.py: src/compiler.py
-
-## My request:
-JOB J3a. Allowed file: src/semantic_checker.py plus ai_usage.txt. Depends on J1/J2. No Git commands.
-
-Spec: Task 2, focusing on semantics and lambda lowering; value restrictions are J3b and LLVM generation is J3c.
-
-Infrastructure:
-1. StructInfo.is_lambda = False; module-level is_lambda_type(t) -> isinstance(t,str) and t.startswith("lambda.").
-2. Checker __init__: program=None, lambda_stack=[], lambda_names={}, settled=False.
-3. Extract Pass 3b mutation fixed-point propagation and pending-member-call verification into settle(): run propagation until stable, verify pending calls, clear the list. In visit_program set self.program=node, call settle at previous Pass 3b location, and set self.settled=True after it. Do not change existing behavior.
-4. fresh_lambda_name(name): first "lambda.NAME", subsequent "lambda.NAME.2", "lambda.NAME.3", etc.
-5. function_visible should use current struct's is_lambda, not getattr.
-
-Implement visit_lambda in this sequence:
-1. Process captures with seen set: duplicate error "'{name}' is captured twice"; capture named "call" error "a capture cannot be named 'call'"; missing visible variable error "cannot capture '{name}': no variable '{name}' is visible here". For each valid capture, construct VarNode at capture identifier position, check its type, make FieldDeclNode(name,type,mutable), save VarNode in init list.
-2. Param whose name is a capture -> "parameter '{name}' has the same name as a capture" at parameter.
-3. Generate MemberFnNode("call", params, return_type, body) and StructNode with fresh lambda name and capture fields; visit_struct and register_struct_methods; set structs[st.name].is_lambda=True, append st to program.generated_structs.
-4. Push (lambda_name, outer_scopes, outer_current_struct) on lambda_stack; visit_member_fn; pop in a finally-safe manner.
-5. If already settled, call settle() to finalize mutating calls before this closure can be called.
-6. Synthesize DeclNode at lambda name coordinates, type st.name, mutable iff any capture is mut, InitListNode of captured values. Set decl.is_closure=True; visit_decl; set node.struct and node.decl. Declare closure AFTER its body, preventing recursion.
-
-Scope rules:
-- not_captured(node,name): for top lambda_stack entry, if name is in immediately enclosing scopes or outer struct fields, emit "'{name}' is not captured by lambda '{lam}': add it to the capture list, [{name}]".
-- Invoke before final used-before-declaration errors in visit_var, visit_assign, visit_field; before unknown-function error in visit_call. Do not turn genuinely unknown names into capture errors.
-- In visit_assign lambda field branch, before generic const-field message, const capture assignment -> "cannot assign to '{name}': the capture '{name}' is const, write [mut {name}]".
-- In visit_call skip current-struct method resolution when current_struct.is_lambda, so bare call(...) cannot call itself.
-
-Verify that existing baseline tests still pass, that the new semantic tree matches the sheet's Lambda/Struct/MemberFn/Decl shape, and that obvious missing/duplicate capture errors have correct positions. Do not attempt or claim successful lambda execution before J3c. Only fix src/semantic_checker.py issues; list other needs in ai_usage.
-
-Append J3a ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/semantic_checker.py: imported FieldDeclNode; added module-level is_lambda_type; initialized StructInfo.is_lambda and checker program/lambda_stack/lambda_names/settled state; extracted settle and updated visit_program; added fresh_lambda_name, not_captured, visit_lambda; updated function_visible, visit_var, visit_assign, visit_field, and visit_call for lambda scopes/capture diagnostics and method resolution; made visit_member_fn body-context restoration finally-safe for lambda body errors.
-- ai_usage.txt: appended this J3a entry.
-What I did: Read repository instructions and the authoritative Task 2 text extracted from docs/w08-practice.pdf during J1 (PDF remains accessible). Implemented capture validation, generated lambda struct/call method registration, checked lambda bodies in isolated member scopes, and synthesized/declared closure variables after body checking. Captures retain their source-identifier bindings in closure initializers; generated declarations use lambda-name positions. Added collision-free generated names, immediate-enclosing-scope missing-capture diagnostics, const-capture assignment diagnostics, and mutation settling for generated methods before closures can be called. Used existing AST constructor argument ordering. Preserved CRLF line endings. Created verification fixtures/harnesses only under /tmp/practice8-j3a with expected AST fragments and diagnostics derived by hand before comparison.
-Kept from existing code (deliberately untouched): Parser, AST classes/dump code, lexer, compiler CLI, src/code_generator.py, all repository tests/expected/AST files, ordinary non-lambda error messages and resolution, J1 callable rewrites and J2 identifier position metadata. Earlier usage entries and student review fields left unchanged. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No J3b lambda value restrictions or J3c LLVM work; no lambda generation/execution attempted or claimed. No dependency installation, source changes outside src/semantic_checker.py, or repository test changes. is_lambda_type is provided for later restrictions without imposing them in J3a.
-Needed elsewhere: J3b must add the deferred lambda value restrictions (passing/returning/assigning/printing/explicit external capture access, etc.); J3c must teach code generation to emit generated structs/methods and closure declarations. No other blockers found for J3a.
-Verification:
-All test/check commands used source ~/lcd/bin/activate (existing Python 3.12.3, llvmlite 0.49.0).
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3a-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3a-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3a-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3a-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Matches baseline; no existing-test regression.
-Sheet checked-AST command: python3 src/compiler.py --ast-checked /tmp/practice8-j2/sheet.txt > /tmp/practice8-j3a/sheet.checked.ast (exit 0). Matches hand-derived Lambda add_k -> Struct lambda.add_k -> Member k i32 const / MemberFn call -> Param y i32 / Block, followed by Decl add_k lambda.add_k const / Var k. Nested times similarly becomes Struct lambda.times, capture field factor, MemberFn call, and its closure Decl; calls dump CallableCall. No LLVM generation invoked.
-Targeted exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3a/check.py > /tmp/practice8-j3a/check.log 2>&1
-rc=$?
-tail -n 24 /tmp/practice8-j3a/check.log
-exit "$rc"
-Result: exit status 0; all targeted checks passed. Hand-derived expected sheet fragments are in /tmp/practice8-j3a/sheet.fragments.expected. Verified generated_structs order lambda.times/lambda.add_k, captured initializer binding to the original k declaration, declaration position 17:4, closure/type flags, method body reuse, settled state and cleared pending calls.
-Exact CLI errors (all checked with --ast-checked; exit 1 and exact compilation error prefix/wording):
-- Missing capture use: 19:11, 'k' is not captured by lambda 'add_k': add it to the capture list, [k].
-- Duplicate capture: 17:17, 'k' is captured twice.
-- Invisible capture: 8:26, cannot capture 'k': no variable 'k' is visible here.
-- Const capture assignment: 19:5, cannot assign to 'k': the capture 'k' is const, write [mut k].
-- Capture/parameter collision: 17:17, parameter 'k' has the same name as a capture (existing ParamNode position begins at the type).
-- Missing capture assignment: 19:5, expected capture diagnostic.
-- Genuinely unknown variable/function: 19:11, retain used-before-declaration / unknown-function diagnostics rather than capture errors.
-- Capture named call: 2:10, a capture cannot be named 'call'.
-- Recursive f(): 3:10, unknown function 'f'; bare call(): 3:10, unknown function 'call'.
-- Missing enclosing variable field access: 8:10; missing enclosing callable: 7:10; both use missing-capture messages.
-- A grandparent k invisible to the immediate enclosing lambda remains a genuinely unknown variable at 6:14; when immediately enclosing lambda captures k, the inner lambda gets a missing-capture diagnostic at 6:14.
-Additional targeted assertions: sibling scopes generate lambda.f, lambda.f.2, lambda.f.3; mutable scalar captures make the closure mutable and call method mutating; another closure can be captured and called via existing J1 machinery; global function named call stays resolvable inside a lambda; lambda stack, scopes, current_struct and current_member_fn restore after a body diagnostic.
-Mutation exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3a/mutation-check.py
-Result: exit 0. Verified fixed-point propagation Counter.call -> Counter.bump -> direct mutation, and propagation into lambda.f when the lambda is declared both before the original settling pass (inside a user member) and after it (top level). Pending calls clear. A Host member capturing its field by mutable copy remains nonmutating itself. Removing mut from the captured Counter reports the required callable mutation error at 17:10 (late case) and 21:18 (early case). Missing enclosing struct-field capture also reports correctly at 21:18. Semantic checks only.
-Open questions: none; J3b value restrictions and J3c LLVM generation remain intentionally pending.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: Code + ai_usage
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J3b] Restrictions on unnamed lambda values (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: ai_usage.txt
-
-## Open tabs:
-- ai_usage.txt: ai_usage.txt
-- semantic_checker.py: src/semantic_checker.py
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-- lexer.py: src/lexer.py
-
-## My request:
-JOB J3b. Allowed file: src/semantic_checker.py plus ai_usage.txt. Depends on J3a. No Git commands.
-
-Spec: Task 2's restrictions on unnamed lambda types; avoid changing diagnostics for old constructs.
-
-Lambda values (type starts with "lambda.") cannot be used as ordinary first-class values except synthesized closure initialization or a legal capture:
-- In visit_call and visit_member_call (including rewritten callable calls), for a lambda-valued VarNode argument: error at argument "'{name}' is a lambda and cannot be passed to '{callee}': its type has no name, so no parameter can have it". Callee should be the shown object name / function name, not an internal "call" label.
-- visit_exit, before existing exit checks: "cannot exit with '{name}': it is a lambda, and its type has no name".
-- visit_print, before existing struct printing: "cannot print '{name}': it is a lambda" (position of printed argument).
-- visit_assign, when final assignment target has lambda type: "cannot assign to '{name}': it is a lambda".
-- visit_decl / check_initializer for user declarations, but NOT generated decl with is_closure=True: reject an initializer that is a lambda value with a clear error at that value.
-- Captures cannot be accessed as public fields: in visit_field, assignment field paths, and J1 field-callable rewrite in visit_member_call, reject field access where base is a lambda: "'{field}' is a capture of '{base}' and is not visible outside its body". Lambda's own captured fields inside call() remain available as ordinary this-field VarNodes.
-- A synthesized closure declaration must still accept a captured lambda; [mut name] capture is permitted and should preserve mutability semantics.
-- Do not accidentally reject direct invocation of a lambda variable (e.g. add_k(5)), which must remain valid.
-
-Verify baseline tests; compare Task 2 reference diagnostics and hand-computed line:col: missing capture 19:11; assign to const capture 19:5; duplicate capture 17:17; unknown capture 8:26; lambda as arg 13:14 (4 spaces, no blank lines per sheet). Also check lambda print/exit/assignment/field-access diagnostics. Report any mismatch, don't alter expected files.
-
-Append J3b ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/semantic_checker.py: added expression_label, check_lambda_argument, check_lambda_initializer, check_lambda_assignment; modified visit_call/visit_member_call for lambda argument diagnostics and visible callee labels; visit_exit/visit_print for value restrictions; visit_decl/check_initializer for explicit generated-closure exemption; visit_assign for closure targets, source values, and capture privacy; visit_field and callable-field rewriting for external capture privacy. Existing non-lambda paths and diagnostics retained.
-- ai_usage.txt: appended this J3b entry.
-What I did: Read AGENTS.md and authoritative Task 2/additional-task diagnostic text from the existing docs/w08-practice.pdf extraction. Rejected ordinary uses of lambda values as arguments, exits, printed values, assignment targets/sources, and user initializers. Added recursive initializer validation while allowing synthesized is_closure declarations to capture lambda values. Blocked external capture reads, writes, and field-call rewrites, including captures reached from another lambda, while retaining implicit this-field VarNode access inside the owning body. Preserved direct/explicit lambda calls, captured lambdas, and mutable copies. Added user-facing callee labels for both callable sugar and explicit .call syntax. Preserved CRLF source line endings. Verification fixtures and hand-derived expectations were written only under /tmp/practice8-j3b.
-Kept from existing code (deliberately untouched): Lexer, parser, AST node classes, compiler CLI, src/code_generator.py, all repository tests/.expected/.ast files, existing non-lambda diagnostics, J3a lambda lowering/scope logic and mutation settling, and J2 source positions. Existing usage entries and student review fields left unchanged. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No LLVM generation/execution for lambdas (J3c); no unrelated refactor or dependency installation. Did not change repository expectations or the temporary expectation file with the supplemental line-count mistake to match observed output.
-Needed elsewhere: J3c must generate LLVM for synthesized lambda structs/methods/declarations. No additional source-file changes needed for J3b.
-Verification:
-Environment: source ~/lcd/bin/activate, using the existing Python 3.12.3 and llvmlite 0.49.0.
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3b-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3b-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3b-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3b-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No baseline regression.
-Targeted exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3b/check.py > /tmp/practice8-j3b/check.log 2>&1
-rc=$?
-tail -n 35 /tmp/practice8-j3b/check.log
-exit "$rc"
-This harness completed 27 exact negative-diagnostic comparisons successfully, plus its positive checks, then exited 1 on a supplemental mutable-capture fixture whose hand-written expectation incorrectly used line 12 instead of line 11. The mismatch is documented below; no compiler defect was found there and its original expectation remains unchanged.
-Five required reference diagnostics all match the PDF/user positions and wording (CLI exit 1, exact compilation error prefix):
-- Missing capture at 19:11: 'k' is not captured by lambda 'add_k': add it to the capture list, [k].
-- Assignment to const capture at 19:5: cannot assign to 'k': the capture 'k' is const, write [mut k].
-- Duplicate capture at 17:17: 'k' is captured twice.
-- Unknown capture at 8:26: cannot capture 'k': no variable 'k' is visible here.
-- Lambda argument at 13:14: 'times' is a lambda and cannot be passed to 'sq': its type has no name, so no parameter can have it.
-Additional exact negative checks passed:
-- Print f at 6:7; exit f at 6:6; assign to const/mut closure f at 6:1; reads f.k at 6:7; writes f.k at 6:1; spaced field call f.  k() at 6:11.
-- User built-in initializer f at 6:7, struct initializer at 10:7, nested struct initializer at 14:10, and lambda assignment source at 7:6 reject the value at its own position with clear unnamed-type messages.
-- Exiting a captured closure or accessing its capture inside another lambda at 8:10 is refused; assigning a mutable captured closure itself at 8:5 is refused.
-- Lambda arguments name g at 10:9 (sugar) / 10:14 (explicit .call), callable object c at 15:9 / 15:14, ordinary method use at 15:13, and callable field h.c at 19:11 / 19:16. No internal call label is exposed for callable invocation.
-- External call through a captured lambda field two.one() is rejected at 9:11, naming capture one of two.
-Positive cases checked semantically: unchanged Task 2 sheet; direct f() and explicit f.call(); captured lambda declarations/invocations; multiple captures combining a lambda with a scalar; additional-task [mut next] captured closure with correct mutable field/closure flags and fixed-point mutation propagation. Own captured fields inside call remain usable. No lambda LLVM attempted.
-Prior J3a semantic regression command: source ~/lcd/bin/activate followed by python3 /tmp/practice8-j3a/check.py > /tmp/practice8-j3b/j3a-check.log 2>&1 (preserved exit status and tailed final four lines). Result: exit 0; all prior capture/scope/lowering checks passed.
-Supplemental expectation mismatch: /tmp/practice8-j3b/const-lambda-capture.expected says 12:11; compiler reports 11:11. Independently recounted source with nl -ba /tmp/practice8-j3b/const-lambda-capture.txt and read the PDF additional-task reference: the first next() call is on line 11, column 11; the PDF also specifies 11:11. The expectation was off by one; original file preserved. This was reported in chat and not hidden by changing the expected file or compiler.
-Independent follow-up exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3b/positive-check.py
-Result: exit 0. Task 2 sheet, previous closure capture/mutable scalar fixtures, and mutable-closure sheet all pass semantic checking; pending calls clear. Independent source/PDF check confirms the const-captured mutating lambda diagnostic at 11:11 and asserts that the original temporary 12:11 expectation remains untouched.
-Open questions: none. Lambda LLVM generation/execution remains pending J3c.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J3c] LLVM generation for lambdas (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/semantic_checker.py
-
-## Open tabs:
-- semantic_checker.py: src/semantic_checker.py
-- ai_usage.txt: ai_usage.txt
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-- lexer.py: src/lexer.py
-
-## My request:
-JOB J3c. Allowed file: src/code_generator.py plus ai_usage.txt. Depends on J3a/J3b. No Git commands.
-
-Spec: Task 2 lambda compilation.
-
-1. In visit_program, use all_structs = node.structs + node.generated_structs for ALL FOUR stages: identified LLVM types, type bodies, member-function declarations, member-function definitions. Create all identified types before setting any type bodies, preserving prior ordering constraints.
-2. Implement visit_lambda(self,node) as node.decl.accept(self). Lambda body is emitted as synthesized lambda.<name>_call member function, NOT inline at declaration.
-3. Use llvmlite.ir exclusively; never write IR as strings.
-
-Verify baseline tests and Task 2 sheet execution via `python3 src/compiler.py <input> <output.ll>` then `lli <output.ll>`; expected printed values 15, 100, 50 and "Program exit with result 11".
-
-Confirm --ast-checked has the sheet's tree (including CallableCall add_k). IR should define `%"lambda.add_k" = type {i32}` and `@"lambda.add_k_call"` whose first arg points to closure; capture initialization must allocate and store via gep; lambda body not emitted in main.
-
-Verify lambda with NO captures and global function call (empty struct) under lli; lambda in while capturing loop variable; lambda capturing another lambda; lambda in member function capturing a field. Derive each expected output manually.
-
-Check behavior and report minimal reproduction if something fails; fix only code_generator.py, never other source files in this job.
-
-Append J3c ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/code_generator.py: visit_program combines node.structs and node.generated_structs for all four struct/member emission stages; added visit_lambda delegating to node.decl.accept(self).
-- ai_usage.txt: appended this J3c entry.
-What I did: Read AGENTS.md, inspected the existing llvmlite generation stages and declaration/member emission, and enabled synthesized lambda types/methods in those stages. All identified types are created before any type bodies; all member declarations precede member definitions. Lambda declarations emit only their synthesized closure declaration, while the lambda body is emitted separately as its member function. Reused existing alloca/GEP/store initialization and member-call generation. Preserved CRLF line endings. Prepared six temporary fixtures and hand-derived output files under /tmp/practice8-j3c before compiling/running them, then checked AST and IR structure.
-Kept from existing code (deliberately untouched): All other code_generator.py methods, parser, lexer, nodes, semantic checker, compiler CLI, repository tests/.expected/.ast files, prior usage entries, and student review fields. IR generation remains exclusively through llvmlite.ir; textual IR was only read for verification. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No changes to other source files, no textual IR construction, no dependency installation, no new repository tests (outside this job's scope). No extra fixes were needed because every execution matched its prior expectation.
-Needed elsewhere: none for J3c.
-Verification:
-Environment: source ~/lcd/bin/activate (existing Python 3.12.3 and llvmlite 0.49.0); lli 18.1.3.
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3c-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3c-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3c-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3c-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No existing-test regression.
-Fixtures and expected outputs prepared with python3 /tmp/practice8-j3c/prepare.py before compilation. Execution verification used a Python subprocess loop; exact child commands:
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/sheet.txt /tmp/practice8-j3c/sheet.ll
-lli /tmp/practice8-j3c/sheet.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/empty.txt /tmp/practice8-j3c/empty.ll
-lli /tmp/practice8-j3c/empty.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/loop.txt /tmp/practice8-j3c/loop.ll
-lli /tmp/practice8-j3c/loop.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/capture-lambda.txt /tmp/practice8-j3c/capture-lambda.ll
-lli /tmp/practice8-j3c/capture-lambda.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/member.txt /tmp/practice8-j3c/member.ll
-lli /tmp/practice8-j3c/member.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/mutable.txt /tmp/practice8-j3c/mutable.ll
-lli /tmp/practice8-j3c/mutable.ll
-All twelve child commands exited 0. Each lli stdout was saved as /tmp/practice8-j3c/NAME.actual and asserted byte-for-byte equal to the prewritten NAME.expected text. No stderr failures or output mismatches.
-Hand derivations and observed matching outputs (one output item per line):
-- sheet: add_k captures k=10 before k changes to 100; add_k(5)=15; k prints 100; sum_scaled(2,3,4)=2*(9+16)=50; add_k(1)=11. Output: 15, 100, 50, Program exit with result 11.
-- empty: capture-free f calls global double; double(6)=12 and double(4)=8. Output: 12, Program exit with result 8. Empty closure LLVM type is {} and executes under lli.
-- loop: each iteration captures i before incrementing it; captured 0,1,2 plus 10 print 10,11,12; final i=3. Output: 10, 11, 12, Program exit with result 3. Capture stores therefore execute on each iteration despite entry-block allocation.
-- capture-lambda: f captures k=3; g captures f and returns f(x)+1. Later k=99 does not affect either closure; g(4)=13 and f(2)=6. Output: 13, Program exit with result 6.
-- member: Scale with k=7 declares mul capturing its field within apply; apply(6)=42 and apply(2)=14. Output: 42, Program exit with result 14.
-- mutable (additional-task sheet): next's private counter prints 1 then 2; twice captures a mutable copy at 2, producing 3*10+4=34; original next then prints 3; original n remains 0. Output: 1, 2, 34, 3, Program exit with result 0.
-AST exact commands:
-source ~/lcd/bin/activate
-python3 src/compiler.py --ast-checked /tmp/practice8-j3c/sheet.txt > /tmp/practice8-j3c/sheet.checked.ast
-cmp /tmp/practice8-j3a/sheet.checked.ast /tmp/practice8-j3c/sheet.checked.ast
-Result: exit 0; unchanged sheet checked tree, including Lambda add_k, Struct lambda.add_k, MemberFn call, Decl add_k, and CallableCall add_k.
-IR inspection commands: sed -n '1,100p' /tmp/practice8-j3c/sheet.ll; sed -n '110,180p' /tmp/practice8-j3c/sheet.ll; rg -n 'all_structs|visit_lambda' src/code_generator.py. Follow-up standard-library Python assertions over the emitted files verified: %"lambda.add_k" = type {i32}; lambda.add_k_call first argument %"lambda.add_k"* %"this"; main's add_k alloca; capture getelementptr and a store to its exact result pointer; add_k's arithmetic appears inside its separate function and not in main; main calls that function; empty fixture has %"lambda.f" = type {}. All assertions passed. These checks inspect generated text only; compiler emission uses llvmlite.ir.
-Open questions: none. No failing reproduction to report.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J4] Verify mutable captures (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: ai_usage.txt
-
-## Open tabs:
-- ai_usage.txt: ai_usage.txt
-- code_generator.py: src/code_generator.py
-- semantic_checker.py: src/semantic_checker.py
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-
-## My request:
-JOB J4. Allowed source file ONLY IF needed: src/semantic_checker.py; always allow ai_usage.txt. No Git commands.
-
-Spec: additional task in docs/w08-practice.pdf. Verify FIRST, not by editing.
-
-Build the sheet's additional program with 4-space indent and no blank lines:
-
-1 i32 n{0}
-2 fn next := [mut n]() -> i32
-3 {
-4     n := n + 1
-5     exit n
-6 }
-7 print(next())
-8 print(next())
-9 fn twice := [mut next]() -> i32
-10 {
-11     i32 a{next()}
-12     i32 b{next()}
-13     i32 r{a * 10 + b}
-14     exit r
-15 }
-16 print(twice())
-17 print(next())
-18 exit n
-
-Expected: 1, 2, 34, 3, "Program exit with result 0".
-
-Check:
-(a) output;
-(b) changing [mut next] to [next] yields "line 11:11: cannot call 'next': its 'call' changes it, and it is not mut";
-(c) mut capture of a const outer variable works without mutating the original;
-(d) closure is mut iff any capture is mut;
-(e) a captured lambda is const unless [mut next].
-
-If anything fails, identify root cause and the minimal correction. Apply ONLY if correction is confined to semantic_checker.py. If another file is necessary, don't modify it; report under Needed elsewhere.
-
-Run baseline tests after any fix. Report explicitly whether J4 changed any code.
-
-Append J4 ai_usage entry and summarize. No Git actions.
-Files changed: ai_usage.txt — appended this J4 entry. J4 changed NO source code; no functions/classes were added or modified.
-What I did: Read AGENTS.md and the authoritative PDF additional-task text via the existing J1 extraction. Verified first using temporary fixtures under /tmp/practice8-j4, with expected outputs and error position derived before compilation. Built the exact 18-line sheet program with four-space indentation and no blank lines. Tested const outer variable copies, closure mutability flags, and const/mut captured lambdas. No correction was needed. SHA-256 snapshots of every src/*.py file before/after verification confirm source contents unchanged.
-Kept from existing code (deliberately untouched): All source files, including semantic_checker.py; all existing tests/.expected/.ast files; prior usage entries; all student review fields. No Git commands or Git metadata changes.
-Considered but NOT done / rejected (with reason): No semantic checker correction because all five requested checks passed. No changes to code generation or other source files; no dependencies installed; no repository tests added or changed.
-Needed elsewhere: none.
-Verification:
-Environment: source ~/lcd/bin/activate; existing Python 3.12.3 and llvmlite 0.49.0; lli 18.1.3.
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j4-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j4-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Matches historical baseline.
-Targeted exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j4/check.py > /tmp/practice8-j4/check.log 2>&1
-rc=$?
-tail -n 10 /tmp/practice8-j4/check.log
-exit "$rc"
-Result: exit status 0; all J4 checks passed. This harness writes all expected files before invoking compiler/lli. For each NAME in sheet, const-outer, const-lambda-legal, flags, it runs /home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j4/NAME.txt /tmp/practice8-j4/NAME.ll, then lli /tmp/practice8-j4/NAME.ll. All eight processes exit 0; stdout equals each prewritten NAME.expected exactly.
-(a) Sheet: output 1, 2, 34, 3, Program exit with result 0 (one per line). Hand derivation: next's private counter reaches 1 then 2; twice copies that state and produces 3*10+4=34; original next subsequently reaches 3; original const n remains 0.
-(b) Const-capture variant command: /home/lolyter/lcd/bin/python3 src/compiler.py --ast-checked /tmp/practice8-j4/const-capture.txt. Exit 1; stderr exactly: compilation error: line 11:11: cannot call 'next': its 'call' changes it, and it is not mut. Position calculated from the first next() on line 11, four spaces plus i32 a{ before the identifier.
-(c) Const outer x=7 captured as [mut x]: increment returns 8, printing original x gives 7, exiting x gives Program exit with result 7. Confirms mutable capture of const is allowed and modifies only the copied field. The exact sheet already exercises const outer n=0 similarly.
-(d) Closure mutability matrix: empty captures -> const; [x,y] -> const; [mut x,y] -> mut; [x,mut y] -> mut; [mut x,mut y] -> mut. Checked synthesized DeclNode.mutable and capture flags for every case. All generated call methods have nonmutating bodies, confirming closure mutability depends on the capture list, not whether the body mutates. Executing all five prints 0 five times, then Program exit with result 0.
-(e) Captured lambda fields are const with [one]/[next] and mut with [mut next]. A nonmutating captured lambda in a const field executes successfully (prints 1, exits with result 1). The mutating const-captured next is rejected at 11:11, while the mut-captured next in the sheet executes. Verified generated struct field is_mut flags, including the registered lambda.twice field after the expected error.
-Source integrity snapshot: /tmp/practice8-j4/source-hashes.json; harness asserts every src/*.py SHA-256 unchanged after all checks. No failure or root-cause correction needed.
-Post-log verification exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j4-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j4-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Source contents still match the pre-verification hash snapshot.
-Open questions: none.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: ai_usage
-Changed by the student: None
-Removed/rejected by the student: None
-
-
-## J5 — Add Practice 8 tests (2026-10-26)
+## [P9-J1] Harness for --remove-unused: CLI flag, tree walker, test runner, red tests (2026-11-06)
 Tool/model: Codex (model not exposed)
 Prompt (verbatim):
-JOB J5. Allowed: NEW files in tests/ok and tests/err, plus ai_usage.txt. No source changes, existing-test edits, or Git commands.
+JOB P9-J1 — Harness for `--remove-unused`: CLI flag, tree walker, test runner, red tests.
 
-Create each NAME.txt + NAME.expected pair; create NAME.ast for 2-3 positive programs only after manually validating parse AST.
+Context: The current practice is Practice 9 (spec: docs/CS400_Practice_9.pdf). Ignore the Practice 8 task list in AGENTS.md for this job, but every rule in AGENTS.md still applies. Measure the actual baseline first (expected ~123 passed on tests/ok + tests/err).
 
-Derive outputs/line:col BY HAND before running compiler.
+ALLOWED FILES: src/compiler.py, src/optimizer.py (new), test.sh, tests/opt/* (new files only), tests/unit/test_optimizer.py (new), ai_usage.txt.
+Do NOT touch: lexer/parser/semantic_checker/code_generator/nodes, README.md, existing tests. If another file needs a change, report it under "Needed elsewhere".
 
-.expected for successful programs contains stdout plus "Program exit with result N"; for error programs, one exact line "compilation error: line L:C: <message>".
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
 
-Sheet-derived programs have four-space body indents and no blank lines.
+1. src/compiler.py: add the flag `--remove-unused` (store_true). It must work in any position among the paths: use `parser.parse_intermixed_args()` instead of `parse_args()` if compatible with the existing parser (plain argparse breaks on `in.txt --remove-unused out.ll` because output is nargs="?"). If incompatible, STOP and ask before restructuring the CLI. Order of passes: lex -> parse -> checker (exactly once, never re-run) -> if flag: `remove_unused(program)` -> codegen. Apply it in both the `--ast-checked` path and the compile path. `--ast` and `--tokens` stay unchanged (parse tree / tokens). Without the flag the behaviour and every message must be byte-identical to before.
+2. src/optimizer.py (new):
+   - `remove_unused(tree, stats=None) -> tree`. Stub for now: returns the tree unchanged. If `stats` (a dict) is given, it will later receive `stats["rounds"]` (int), `stats["removed_decls"]` (list of names, in removal order) and `stats["removed_functions"]` (list of names). Initialise these keys in the stub (0 / [] / []).
+   - `children(node)` returning the child nodes to visit: Program -> structs + functions + statements + [exit] (NOT generated_structs); Struct -> methods; Function/MemberFn -> [body]; Block -> statements + [exit] if present; Lambda -> [decl, struct] when `struct` is not None (checked tree); Decl -> `init.values` (InitListNode has no accept(); descend into nested InitListNode values); Assign -> [value]; If/While/Exit/BinOp/Not/Print accordingly (Print: skip when `is_string`); Field -> [target] if target is not None; Call -> [sugar] if sugar is not None else args; MemberCall -> [target] + args; Var/Const/Bool/Read/String -> [].
+   - `class Walker` that dispatches on `type(node).__name__`: remove the trailing `Node` suffix (if present), lowercase the remaining name, and call `on_<name>`. Examples: DeclNode -> on_decl, VarNode -> on_var, FieldNode -> on_field, AssignNode -> on_assign. Fall back to visiting `children(node)` when the handler does not exist. Add a small unit test verifying the dispatch.
+3. test.sh: add an env var (e.g. REMOVE_UNUSED=1) that inserts `--remove-unused` into the COMPILER command for the existing tests/ok and tests/err loops; with it unset the script behaves exactly as now. Add a third section for tests/opt: for each NAME.txt, (a) `--remove-unused --ast-checked` output must equal NAME.astc; (b) compile WITHOUT and WITH the flag, run both through lli (stdin from NAME.in if present), both outputs must equal NAME.expected; (c) optional NAME.defs: extract only the defined function names from `grep '^define'` of the flagged .ll and compare them with the file's lines. Section (a)-(c) always pass the flag explicitly, whatever the env var says. Preserve the existing test runner's convention for reporting program exit values. Capture and compare exit codes correctly: a nonzero program exit value is not automatically a test failure. If the existing `.expected` convention for stdout and exit values is unclear, STOP and ask before creating tests. Count these in the summary, but print the tests/ok+err result clearly so it can be compared with the baseline.
+4. TDD red tests (derive by hand, do not copy compiler output):
+   - tests/opt/warmup_chain.txt: `i32 x{10}` / `i32 y{x}` / `i32 z{15}` / `exit z`. Expected tree after the pass: Program / "  Decl z i32 const" / "    Const 15" / "  Exit" / "    Var z" (two-space indents per level, as nodes.py dump() does). Expected result: `Program exit with result 15`, using the existing test runner's output/exit-value convention.
+   - tests/opt/warmup_shadow.txt: `i32 mut r{0}` / `i32 x{1}` / `if true` / `{` / ` i32 x{10}` / ` r := x` / `}` / `exit r`. Expected tree is in the spec ("The tree after the pass"): the outer x is gone, inner x and `r := x` stay. Expected result: `Program exit with result 10`, using the same convention.
+   - tests/unit/test_optimizer.py (stdlib unittest, run from src/ via sys.path): helper `checked(src: str)` doing lex -> Parser -> SemanticChecker().visit_program and returning the tree. Tests: (green) `children()` finds every VarNode of a program that uses a callable-object call, a nested init list and a lambda capture (so the walker does not miss `sugar` or capture inits); (green) Walker dispatch calls `on_decl`, `on_var`, etc. correctly; (red, expected to fail until P9-J2) warm-up 1 gives rounds == 3 and removed_decls == ["y", "x"]; warm-up 2 gives rounds == 2 and removed_decls == ["x"].
 
-Positive tests (19):
+Acceptance: tests/ok + tests/err still all green with and without REMOVE_UNUSED=1 (report the totals); the new warm-up tests and the red unit tests fail for the right reason (nothing removed); the green walker tests pass. State clearly which failures are intentional red tests.
 
-Task 1 (5):
-- callable_both_ways (sheet)
-- callable_field (s.scale(7), scale(side) within a member function)
-- callable_mut_counter (three c() calls then print)
-- callable_in_expr (arithmetic, exit result, global-function arg)
-- callable_i64_param (i32->i64 widening)
-
-Task 2 (9):
-- lambda_sheet
-- lambda_no_capture_global_call
-- lambda_capture_changed_after
-- lambda_in_function_param
-- lambda_in_while
-- lambda_in_if_block
-- lambda_captures_lambda
-- lambda_in_member_fn
-- lambda_struct_capture
-
-Mut (5):
-- mut_counter (sheet)
-- mut_loop
-- mut_two_copies
-- mut_const_and_mut
-- mut_capture_const_var
-
-Negative tests (22):
-
-Task 1 (7):
-- callable_no_call
-- callable_on_i32
-- callable_var_and_fn
-- callable_const_obj
-- callable_const_field
-- callable_wrong_args
-- callable_wrong_type
-
-Task 2 (13):
-- lambda_missing_capture (19:11)
-- lambda_assign_capture (19:5)
-- lambda_dup_capture (17:17)
-- lambda_unknown_capture (8:26)
-- lambda_passed_arg (13:14)
-- lambda_exit_value
-- lambda_print
-- lambda_assign
-- lambda_calls_itself
-- lambda_param_like_capture
-- lambda_capture_field_access (add_k.k)
-- lambda_no_bracket_in_block
-- capture_list_on_member_fn
-
-Mut (2):
-- mut_capture_const_call (11:11)
-- mut_assign_const_capture
-
-Run tests, report totals and any failing case with concise reason.
-
-If compiler result disagrees with independently calculated expected output, DO NOT change expected to match; report minimal reproduction and stop affected tests.
-
-Do not modify existing tests or source code.
-
-Append J5 ai_usage entry and summarize. No Git actions.
-Files changed: Added `NAME.txt` and `NAME.expected` for all 19 positive programs and 22 negative programs under tests/ok and tests/err; added `callable_both_ways.ast`, `lambda_no_capture_global_call.ast`, and `mut_counter.ast`; appended this entry to ai_usage.txt. The four positive inputs callable_in_expr, callable_mut_counter, mut_const_and_mut, and mut_two_copies use local result declarations because exit does not accept arithmetic expressions directly.
-What I did: Added the requested test fixtures. Manually inspected the three selected `--ast` outputs before recording their `.ast` files. Kept every `.expected` value as initially written after finding discrepancies; did not change source files or existing tests.
-Kept from existing code (deliberately untouched): All source files and pre-existing tests.
-Considered but NOT done / rejected (with reason): Did not change expected files to match compiler observations, as instructed. Did not add AST snapshots for more than three positive tests.
-Needed elsewhere: none.
-Verification: Latest recorded pre-J5 baseline from J4: `source ~/lcd/bin/activate; ./test.sh` -> 82 passed, 0 failed, exit 0 (not rerun immediately before adding J5 fixtures). J5 full suite: `set -o pipefail; source ~/lcd/bin/activate; ./test.sh > /tmp/practice8-j5-verified-tests.log 2>&1; rc=$?; tail -n 4 /tmp/practice8-j5-verified-tests.log; rg -n -C 1 '\\[FAIL\\]' /tmp/practice8-j5-verified-tests.log; exit "$rc"` -> 117 passed, 6 failed, exit 1. `callable_in_expr` expected 80 but computes and prints 76 (a(4)=14, a(2)=12, twice(a(1))=22; total 54+22). Five negative expected positions differ from hand-counted source lines and compiler diagnostics: callable_const_field expected 14:8, got 15:8; callable_wrong_args expected 9:6, got 10:6; callable_wrong_type expected 9:8, got 10:8; lambda_exit_value expected 6:6, got 5:6; lambda_print expected 6:7, got 5:7. These expected files remain unchanged. The other 35 J5 fixtures passed.
-Open questions: none.
+Close-out: append one ai_usage.txt entry (ID P9-J1, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- src/compiler.py: import remove_unused, add --remove-unused with parse_intermixed_args(), call the stub after the existing single checker pass in checked-AST and compile paths.
+- src/optimizer.py (new): remove_unused statistics stub, children() checked-tree traversal including nested initializers, Walker.visit() type-name dispatch and fallback.
+- test.sh: REMOVE_UNUSED environment switch, tests/opt AST/runtime/optional-definition checks, independent process-status comparison, separate existing-suite and optimization totals.
+- tests/opt/warmup_chain.txt, warmup_chain.astc, warmup_chain.expected (new): first warm-up and hand-derived optimized tree/result.
+- tests/opt/warmup_shadow.txt, warmup_shadow.astc, warmup_shadow.expected (new): shadowing warm-up and spec-derived optimized tree/hand-derived result.
+- tests/unit/test_optimizer.py (new): checked() helper, two green traversal/dispatch tests, two intentionally red fixed-point/removal-order tests.
+- ai_usage.txt: repository-instructions header and this P9-J1 entry.
+What I did: Verified docs/CS400_Practice_9.pdf exists and read its relevant specification. Measured the baseline before source edits. The default Python lacked llvmlite (0 passed, 123 failed); found the existing ~/lcd environment and obtained 123 passed, 0 failed before changes. Used that environment for subsequent compiler verification, as the student directed. Implemented only the requested harness and identity stub. Derived both .astc and .expected fixtures before comparing compiler output. Kept optimization runtime checks running even when AST comparisons fail. Verified the pass order, flag positions, unchanged raw modes and unflagged output, stdin handling, optional definitions, and matching/mismatching nonzero process statuses.
+Kept from existing code (deliberately untouched): lexer, parser, semantic_checker, code_generator, nodes, README.md, all pre-existing tests and expected snapshots; existing compiler diagnostics and language exit-value reporting; original tests/ok and tests/err loop logic apart from the compiler environment switch. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No actual declaration/function removal or effect analysis (later jobs); no regeneration of fixtures from compiler output; no dependency installation (existing environment available); no new abstractions or unrelated refactoring. The initial green test program used an expression directly after exit, which the grammar disallows; corrected the new program to declare result{seed + v} and exit result, deriving its VarNode expectation by hand before rerunning. No existing source tests or expected results were changed.
+Needed elsewhere: none
+Verification:
+- Initial baseline, before changes (default Python):
+  set -o pipefail; ./test.sh > /tmp/practice9-baseline.log 2>&1; rc=$?; tail -n 8 /tmp/practice9-baseline.log; exit "$rc"
+  Result: status 1; 0 passed, 123 failed, caused by ModuleNotFoundError: No module named 'llvmlite'.
+- Existing-environment baseline, before changes:
+  PATH=/home/lolyter/lcd/bin:$PATH bash -c 'set -o pipefail; ./test.sh > /tmp/practice9-baseline-venv.log 2>&1; rc=$?; tail -n 8 /tmp/practice9-baseline-venv.log; exit "$rc"'
+  Result: status 0; 123 passed, 0 failed.
+- Final default runner:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-tests-default.log 2>&1
+  rc=$?
+  tail -n 32 /tmp/practice9-tests-default.log
+  exit "$rc"
+  Result: status 1 (intentional red tests); existing tests/ok + tests/err: 123 passed, 0 failed; optimization checks: 2 passed, 2 failed; total: 125 passed, 2 failed. Both runtime comparisons pass; only warmup_chain and warmup_shadow optimized AST comparisons fail because the stub retains unused declarations.
+- Final flagged runner:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-tests-flag.log 2>&1
+  rc=$?
+  tail -n 8 /tmp/practice9-tests-flag.log
+  exit "$rc"
+  Result: status 1 (same intentional red tests); existing tests/ok + tests/err: 123 passed, 0 failed; optimization checks: 2 passed, 2 failed; total: 125 passed, 2 failed. Error messages continue to match all existing error fixtures.
+- Unit tests from repository root:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-unit.log 2>&1
+  rc=$?
+  cat /tmp/practice9-unit.log
+  exit "$rc"
+  Result: 4 tests, 2 passed, 2 intentional failures, no errors. Green: children traversal and Walker dispatch. Red: actual (rounds, removed_decls) = (0, []) versus (3, ['y', 'x']) and (2, ['x']).
+- Unit tests from src/:
+  source ~/lcd/bin/activate
+  cd src
+  python3 ../tests/unit/test_optimizer.py -v > /tmp/practice9-unit-from-src.log 2>&1
+  rc=$?
+  tail -n 37 /tmp/practice9-unit-from-src.log
+  exit "$rc"
+  Result: same 2 green tests and 2 intentional red tests, no errors.
+- source ~/lcd/bin/activate; python3 /tmp/practice9-pass-order.py
+  Result: passed; instrumented runpy checks show exactly one checker call before one optimizer call in compile and checked-AST modes; tokens and raw AST invoke neither.
+- bash -n test.sh
+  Result: status 0.
+- Additional inline Python subprocess assertions in the activated environment: passed. Compared the saved pre-edit compiler against the current compiler for tokens, AST, checked AST, compilation stdout/stderr/status and emitted IR, and the missing-output diagnostic. Checked --remove-unused before, between and after paths. Exercised the optimization section in a temporary directory using hand-written input/AST/output/.defs fixtures and real generated IR/lli, overriding only the process statuses: stdin and .defs checks pass with matching status 7 (3 passed, 0 failed); differing statuses 7/8 fail only execution (2 passed, 1 failed); putting external declaration printf in .defs fails only the definitions check (2 passed, 1 failed). Temporary validation files stayed under /tmp.
+Open questions: none
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: Ok and err tests
-Changed by the student: Added .ast files, and some expected
-Removed/rejected by the student: None
-
-## [J6] Document lambda grammar and checked AST (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim):
-JOB J6. Allowed files: grammar.ebnf, README.md, ai_usage.txt. No Git commands, no source-code edits.
-
-1. grammar.ebnf: add
-     lambda  ::= "fn" ident ":=" "[" [ capture { "," capture } ] "]"
-                 "(" [ type ident { "," type ident } ] ")" "->" type NL block
-     capture ::= [ "mut" ] ident
-   and extend statement to decl | assign | if | while | print | lambda, preserving style.
-
-2. README.md: add "### Print the AST after the semantic pass" with `python3 src/compiler.py --ast-checked input.txt`, matching the existing documentation style.
-
-3. Audit ai_usage.txt: require entries for J0, J1, J2, J3a, J3b, J3c, J4, J5. List missing entries without inventing them. Review fields marked PENDING REVIEW are legitimate until the student has reviewed; list outstanding ones, DO NOT fill them. The J6 entry itself will also remain pending until student review.
-
-4. Add a short summary at the top of ai_usage.txt: tools/models truly known, jobs completed, facts about student accepted/changed/rejected ONLY if provided by student, final actual ./test.sh totals. If review data is missing say "student review pending"; do not invent counts.
-
-5. In chat (not in a new file), propose PR description for practice-8 -> main, reviewer vovaskochko, describing implemented functionality, demo commands from the spec, and ai_usage.txt. Treat it as draft only; do not use Git or create a PR.
-
-Append J6 ai_usage entry and summarize. No Git actions.
-Files changed: grammar.ebnf — added lambda/capture productions and included lambda in statement; README.md — documented `--ast-checked`; ai_usage.txt — added the top summary and this J6 record.
-What I did: Documented Task 2 lambda syntax using the existing grammar style and added the checked-AST command beside the parse-AST instructions. Audited the required job headings: J0, J1, J2, J3a, J3b, J3c, J4, and J5 are present; none are missing. Left those and all prior review text unchanged. The top summary reports only tools/model data present in the log, notes the recorded job set, and gives the current suite result. J6 review fields are filled in below.
-Kept from existing code (deliberately untouched): All source files, tests and prior job records/review fields. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): Did not invent missing job entries or review decisions. Did not create a PR or run Git commands; the requested PR description is provided in chat as a draft.
-Needed elsewhere: none.
-Verification: Read the current grammar.ebnf, README.md, and ai_usage.txt; audited headings and PENDING REVIEW markers with `rg`. Suite command: `set -o pipefail; source ~/lcd/bin/activate; ./test.sh > /tmp/practice8-j6-tests.log 2>&1; rc=$?; tail -n 12 /tmp/practice8-j6-tests.log; exit "$rc"`. Result: 123 passed, 0 failed; exit status 0.
-Open questions: none.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: grammar.ebnf, README.md
-Changed by the student: none
-Removed/rejected by the student: none
+Kept as-is: optimizer.py, compile.py
+Changed by the student: name of the tests (warmup -> unused_var) to fit what it is testing
+Removed/rejected by the student: nothing for now - plan to remove test_optimizer.py and leave only behavior check
