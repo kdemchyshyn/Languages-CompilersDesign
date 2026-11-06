@@ -1,0 +1,12 @@
+struct Wide
+{
+    i32 k
+    fn call := (i64 x) -> i64
+    {
+        i64 r{x * k}
+        exit r
+    }
+}
+Wide w{3}
+print(w(14))
+exit w(1)

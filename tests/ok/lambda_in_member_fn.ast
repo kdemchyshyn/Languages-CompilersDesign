@@ -1,0 +1,29 @@
+Program
+  Struct Scale
+    Member k i32 const
+    MemberFn apply -> i32
+      Param v i32
+      Block
+        Lambda multiply -> i32
+          Capture k
+          Param x i32
+          Block
+            Decl r i32 const
+              BinOp *
+                Var k
+                Var x
+            Exit
+              Var r
+        Exit
+          Call multiply
+            Var v
+  Decl s Scale const
+    Const 7
+  Print
+    MemberCall apply
+      Var s
+      Const 6
+  Exit
+    MemberCall apply
+      Var s
+      Const 2

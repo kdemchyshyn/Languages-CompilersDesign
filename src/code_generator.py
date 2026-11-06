@@ -100,18 +100,19 @@ class CodeGen:
         raise ValueError(f"Unknown type: {type_name}")
 
     def visit_program(self, node):
+        all_structs = node.structs + node.generated_structs
         # Emit named LLVM struct types
-        for struct_decl in node.structs:
+        for struct_decl in all_structs:
             llvm_st = self.module.context.get_identified_type(struct_decl.name)
             self.struct_types[struct_decl.name] = llvm_st
             self.struct_field_types[struct_decl.name] = [f.type_name for f in struct_decl.fields]
             self.struct_field_names[struct_decl.name] = [f.name for f in struct_decl.fields]
 
-        for struct_decl in node.structs:
+        for struct_decl in all_structs:
             llvm_st = self.struct_types[struct_decl.name]
             llvm_st.set_body(*[self.get_llvm_type(f.type_name) for f in struct_decl.fields])
 
-        for struct_decl in node.structs:
+        for struct_decl in all_structs:
             this_ptr_type = ir.PointerType(self.struct_types[struct_decl.name])
             for fn in struct_decl.methods:
                 param_types = [this_ptr_type] + [self.get_llvm_type(p.type_name) for p in fn.params]
@@ -127,7 +128,7 @@ class CodeGen:
             fn_type = ir.FunctionType(ret_type, param_types)
             self.llvm_functions[fn.name] = ir.Function(self.module, fn_type, name=f"_user_{fn.name}")
 
-        for struct_decl in node.structs:
+        for struct_decl in all_structs:
             for fn in struct_decl.methods:
                 self.visit_member_fn(fn, struct_decl.name)
 
@@ -139,6 +140,9 @@ class CodeGen:
         for stmt in node.statements:
             stmt.accept(self)
         node.exit.accept(self)
+
+    def visit_lambda(self, node):
+        return node.decl.accept(self)
 
     def visit_function(self, node):
         saved_func = self.function
@@ -395,6 +399,9 @@ class CodeGen:
             return self.builder.load(ptr)
 
     def visit_call(self, node):
+        if getattr(node, "sugar", None) is not None:
+            return node.sugar.accept(self)
+
         arg_vals = []
         for i, arg in enumerate(node.args):
             val = arg.accept(self)

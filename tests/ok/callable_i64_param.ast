@@ -1,0 +1,20 @@
+Program
+  Struct Wide
+    Member k i32 const
+    MemberFn call -> i64
+      Param x i64
+      Block
+        Decl r i64 const
+          BinOp *
+            Var x
+            Var k
+        Exit
+          Var r
+  Decl w Wide const
+    Const 3
+  Print
+    Call w
+      Const 14
+  Exit
+    Call w
+      Const 1

@@ -1,0 +1,10 @@
+struct Unary
+{
+    i32 n
+    fn call := (i32 x) -> i32
+    {
+        exit x
+    }
+}
+Unary u{1}
+exit u()

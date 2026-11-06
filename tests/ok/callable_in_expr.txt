@@ -1,0 +1,20 @@
+struct Adder
+{
+    i32 k
+    fn call := (i32 x) -> i32
+    {
+        i32 r{x + k}
+        exit r
+    }
+}
+fn twice := (i32 x) -> i32
+{
+    i32 r{x * 2}
+    exit r
+}
+Adder a{10}
+i32 x{a(4) * 3 + a(2)}
+i32 y{twice(a(1))}
+print(x + y)
+i32 result{x + y}
+exit result

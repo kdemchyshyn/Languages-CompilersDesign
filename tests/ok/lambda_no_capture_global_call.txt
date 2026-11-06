@@ -1,0 +1,11 @@
+fn double := (i32 x) -> i32
+{
+    i32 r{x * 2}
+    exit r
+}
+fn twice := [](i32 x) -> i32
+{
+    exit double(x)
+}
+print(twice(6))
+exit twice(4)

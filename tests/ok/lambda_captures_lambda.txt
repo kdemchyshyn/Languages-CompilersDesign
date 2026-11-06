@@ -1,0 +1,14 @@
+i32 mut k{3}
+fn multiply := [k](i32 x) -> i32
+{
+    i32 r{k * x}
+    exit r
+}
+fn plus_one := [multiply](i32 x) -> i32
+{
+    i32 r{multiply(x) + 1}
+    exit r
+}
+k := 100
+print(plus_one(4))
+exit multiply(2)

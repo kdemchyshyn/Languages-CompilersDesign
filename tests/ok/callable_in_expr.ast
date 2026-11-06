@@ -1,0 +1,45 @@
+Program
+  Struct Adder
+    Member k i32 const
+    MemberFn call -> i32
+      Param x i32
+      Block
+        Decl r i32 const
+          BinOp +
+            Var x
+            Var k
+        Exit
+          Var r
+  Function twice -> i32
+    Param x i32
+    Block
+      Decl r i32 const
+        BinOp *
+          Var x
+          Const 2
+      Exit
+        Var r
+  Decl a Adder const
+    Const 10
+  Decl x i32 const
+    BinOp +
+      BinOp *
+        Call a
+          Const 4
+        Const 3
+      Call a
+        Const 2
+  Decl y i32 const
+    Call twice
+      Call a
+        Const 1
+  Print
+    BinOp +
+      Var x
+      Var y
+  Decl result i32 const
+    BinOp +
+      Var x
+      Var y
+  Exit
+    Var result

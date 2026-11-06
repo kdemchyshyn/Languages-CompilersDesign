@@ -1,0 +1,35 @@
+Program
+  Struct Scale
+    Member k i32 const
+    MemberFn call -> i32
+      Param v i32
+      Block
+        Decl r i32 const
+          BinOp *
+            Var v
+            Var k
+        Exit
+          Var r
+  Struct Shape
+    Member scale Scale const
+    Member side i32 const
+    MemberFn grown -> i32
+      Block
+        Decl g i32 const
+          Call scale
+            Var side
+        Exit
+          Var g
+  Decl s Shape const
+    InitList
+      Const 2
+    Const 5
+  Print
+    MemberCall scale
+      Var s
+      Const 7
+  Print
+    MemberCall grown
+      Var s
+  Exit
+    Const 0

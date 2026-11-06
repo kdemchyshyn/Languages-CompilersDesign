@@ -1,0 +1,68 @@
+Program
+  Struct Scale
+    Member k i32 const
+    MemberFn call -> i32
+      Param v i32
+      Block
+        Decl r i32 const
+          BinOp *
+            Var v
+            Var k
+        Exit
+          Var r
+  Struct Counter
+    Member n i32 mut
+    MemberFn call -> i32
+      Block
+        Assign n
+          BinOp +
+            Var n
+            Const 1
+        Exit
+          Var n
+  Struct Shape
+    Member scale Scale const
+    Member side i32 const
+    MemberFn grown -> i32
+      Block
+        Decl g i32 const
+          Call scale
+            Var side
+        Exit
+          Var g
+  Decl triple Scale const
+    Const 3
+  Decl c Counter mut
+    Const 0
+  Decl s Shape const
+    InitList
+      Const 2
+    Const 5
+  Print
+    Call triple
+      Const 14
+  Print
+    MemberCall call
+      Var triple
+      Const 14
+  Print
+    MemberCall scale
+      Var s
+      Const 7
+  Print
+    MemberCall grown
+      Var s
+  Decl a i32 const
+    Call c
+  Decl b i32 const
+    Call c
+  Print
+    Var c
+  Decl r i32 const
+    BinOp +
+      BinOp *
+        Var a
+        Const 10
+      Var b
+  Exit
+    Var r

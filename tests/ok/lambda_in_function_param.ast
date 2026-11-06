@@ -1,0 +1,26 @@
+Program
+  Function apply -> i32
+    Param factor i32
+    Param x i32
+    Block
+      Lambda scale -> i32
+        Capture factor
+        Param y i32
+        Block
+          Decl r i32 const
+            BinOp *
+              Var factor
+              Var y
+          Exit
+            Var r
+      Exit
+        Call scale
+          Var x
+  Print
+    Call apply
+      Const 3
+      Const 4
+  Exit
+    Call apply
+      Const 2
+      Const 5

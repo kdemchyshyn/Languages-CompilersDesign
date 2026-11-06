@@ -1,0 +1,11 @@
+fn apply := (i32 factor, i32 x) -> i32
+{
+    fn scale := [factor](i32 y) -> i32
+    {
+        i32 r{factor * y}
+        exit r
+    }
+    exit scale(x)
+}
+print(apply(3, 4))
+exit apply(2, 5)

@@ -1,0 +1,25 @@
+Program
+  Decl i i32 mut
+    Const 0
+  While
+    BinOp !=
+      Var i
+      Const 3
+    Block
+      Lambda step -> i32
+        Capture i
+        Block
+          Decl r i32 const
+            BinOp +
+              Var i
+              Const 10
+          Exit
+            Var r
+      Assign i
+        BinOp +
+          Var i
+          Const 1
+      Print
+        Call step
+  Exit
+    Var i

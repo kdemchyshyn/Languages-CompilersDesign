@@ -1,0 +1,15 @@
+Program
+  If
+    Bool true
+    Block
+      Decl value i32 const
+        Const 7
+      Lambda get -> i32
+        Capture value
+        Block
+          Exit
+            Var value
+      Print
+        Call get
+  Exit
+    Const 0

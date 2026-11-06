@@ -57,8 +57,8 @@ for test_file in "$PASS_DIR"/*.txt; do
                     failed=$((failed + 1))
                 fi
             else
-                echo "  ⚠️ [WARN] $test_file (Compiled and AST matched, but $expected_file is missing)"
-                passed=$((passed + 1))
+                echo "  ❌ [FAIL] $test_file (Compiled and AST matched, but $expected_file is missing)"
+                failed=$((failed + 1))
             fi
         else
             echo "  ⚠️ [WARN] lli command not found. Skipping execution phase for $test_file."
@@ -95,9 +95,9 @@ for test_file in "$FAIL_DIR"/*.txt; do
                 failed=$((failed + 1))
             fi
         else
-            echo "  ⚠️ [WARN] $test_file correctly failed, but $expected_file is missing."
+            echo "  ❌ [FAIL] $test_file correctly failed, but $expected_file is missing."
             echo "     -> Caught: $ERROR_MSG"
-            passed=$((passed + 1))
+            failed=$((failed + 1))
         fi
     else
         echo "  ❌ [FAIL] $test_file incorrectly compiled! (Expected an error)"

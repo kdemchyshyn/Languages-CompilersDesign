@@ -1,0 +1,26 @@
+i32 n{0}
+fn next := [mut n]() -> i32
+{
+    n := n + 1
+    exit n
+}
+i32 a{next()}
+i32 b{next()}
+fn left := [mut next]() -> i32
+{
+    i32 x{next()}
+    i32 y{next()}
+    i32 r{x * 10 + y}
+    exit r
+}
+fn right := [mut next]() -> i32
+{
+    i32 x{next()}
+    i32 y{next()}
+    i32 r{x * 10 + y}
+    exit r
+}
+print(left())
+print(right())
+print(next())
+exit n
