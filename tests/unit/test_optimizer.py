@@ -453,6 +453,228 @@ exit keep()
             self.assertEqual(result.stdout, b"Program exit with result 3\n")
             self.assertEqual(result.stderr, b"")
 
+    def test_effect_spec_chain_and_arguments(self):
+        tree = checked("""fn square := (i32 a) -> i32
+{
+    i32 r{a * a}
+    exit r
+}
+fn quiet := (i32 a) -> i32
+{
+    exit square(a)
+}
+fn chain := (i32 a) -> i32
+{
+    exit relay(a)
+}
+fn relay := (i32 a) -> i32
+{
+    exit loud(a)
+}
+fn loud := (i32 a) -> i32
+{
+    print(a)
+    exit a
+}
+i32 a{square(3)}
+i32 b{quiet(4)}
+i32 c{loud(5)}
+i32 d{quiet(loud(1))}
+exit 0
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("fn", "loud"), ("fn", "relay"), ("fn", "chain")})
+        self.assertEqual([optimizer.has_effect(decl.init.values[0], effects)
+                          for decl in tree.statements], [False, False, True, True])
+
+    def test_effect_mutating_and_pure_members(self):
+        tree = checked("""struct Counter
+{
+    i32 mut n
+    fn bump := () -> i32
+    {
+        n := n + 1
+        exit n
+    }
+    fn peek := () -> i32
+    {
+        exit n
+    }
+    fn uncalled_bump := () -> i32
+    {
+        n := n + 2
+        exit n
+    }
+}
+Counter mut c{0}
+i32 b{c.bump()}
+i32 p{c.peek()}
+exit 0
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("Counter", "bump"), ("Counter", "uncalled_bump")})
+        bump = tree.statements[1].init.values[0]
+        peek = tree.statements[2].init.values[0]
+        self.assertTrue(optimizer.has_effect(bump, effects))
+        self.assertTrue(optimizer.has_effect(bump, set()))  # The call-site mutation flag.
+        self.assertFalse(optimizer.has_effect(peek, effects))
+
+    def test_effect_this_calls(self):
+        tree = checked("""struct Reporter
+{
+    i32 value
+    fn loud := () -> i32
+    {
+        print(value)
+        exit value
+    }
+    fn relay := () -> i32
+    {
+        exit loud()
+    }
+}
+Reporter r{1}
+exit r.relay()
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("Reporter", "loud"), ("Reporter", "relay")})
+        self.assertTrue(optimizer.has_effect(tree.exit.value, effects))
+
+    def test_effect_while(self):
+        tree = checked("fn loop := () -> i32\n{\n while false\n {\n  i32 dead{0}\n }\n"
+                       " exit 0\n}\ni32 unused{loop()}\nexit 0\n")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("fn", "loop")})
+        self.assertTrue(optimizer.has_effect(tree.statements[0].init.values[0], effects))
+
+    def test_effect_recursion(self):
+        tree = checked("""fn recurse := () -> i32
+{
+    exit recurse()
+}
+fn first := () -> i32
+{
+    exit second()
+}
+fn second := () -> i32
+{
+    exit first()
+}
+fn caller := () -> i32
+{
+    exit first()
+}
+fn independent := () -> i32
+{
+    exit 0
+}
+exit 0
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("fn", "recurse"), ("fn", "first"),
+                                   ("fn", "second"), ("fn", "caller")})
+
+    def test_effect_member_recursion(self):
+        tree = checked("""struct Loop
+{
+    i32 value
+    fn first := () -> i32
+    {
+        exit second()
+    }
+    fn second := () -> i32
+    {
+        exit first()
+    }
+}
+exit 0
+""")
+        self.assertEqual(optimizer.analyze_effects(tree),
+                         {("Loop", "first"), ("Loop", "second")})
+
+    def test_effect_printing_and_pure_lambdas(self):
+        tree = checked("""fn noisy := [](i32 a) -> i32
+{
+    print(a)
+    exit a
+}
+fn quiet := [](i32 a) -> i32
+{
+    exit a
+}
+i32 x{noisy(1)}
+i32 y{quiet(2)}
+exit 0
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("lambda.noisy", "call")})
+        self.assertTrue(optimizer.has_effect(tree.statements[2].init.values[0], effects))
+        self.assertFalse(optimizer.has_effect(tree.statements[3].init.values[0], effects))
+
+    def test_effect_mutating_callable(self):
+        tree = checked("i32 n{0}\nfn counter := [mut n]() -> i32\n{\n"
+                       " n := n + 1\n exit n\n}\ni32 unused{counter()}\nexit 0\n")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("lambda.counter", "call")})
+        call = tree.statements[2].init.values[0]
+        self.assertTrue(optimizer.has_effect(call, effects))
+        self.assertTrue(optimizer.has_effect(call, set()))
+
+    def test_effect_nested_lambda_is_separate(self):
+        tree = checked("fn enclosing := () -> i32\n{\n"
+                       " fn nested := []() -> i32\n {\n  print(1)\n  exit 0\n }\n"
+                       " exit 0\n}\nexit 0\n")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("lambda.nested", "call")})
+        self.assertFalse(optimizer.has_effect(tree.functions[0].body.statements[0], effects))
+
+    def test_effect_read_and_nested_initializer(self):
+        tree = checked("""struct Box
+{
+    i32 value
+}
+struct Outer
+{
+    Box box
+}
+fn input := () -> i32
+{
+    i32 n{read()}
+    exit n
+}
+fn caller := () -> i32
+{
+    exit input()
+}
+Outer unused{{read()}}
+exit 0
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("fn", "input"), ("fn", "caller")})
+        self.assertTrue(optimizer.has_effect(tree.statements[0].init, effects))
+
+    def test_effect_call_target(self):
+        tree = checked("""struct Box
+{
+    i32 value
+    fn peek := () -> i32
+    {
+        exit value
+    }
+}
+fn make := () -> Box
+{
+    print(1)
+    Box result{2}
+    exit result
+}
+i32 unused{make().peek()}
+exit 0
+""")
+        effects = optimizer.analyze_effects(tree)
+        self.assertEqual(effects, {("fn", "make")})
+        self.assertTrue(optimizer.has_effect(tree.statements[0].init.values[0], effects))
+
 
 if __name__ == "__main__":
     unittest.main()

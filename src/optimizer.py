@@ -77,6 +77,71 @@ def has_call_or_read(expr):
         has_call_or_read(child) for child in children(expr))
 
 
+def _call_key(node):
+    if isinstance(node, CallNode) and node.sugar is not None:
+        node = node.sugar
+    if isinstance(node, CallNode) and not getattr(node, "is_this_call", False):
+        return ("fn", node.func_name)
+    return (node.fn_decl.struct_name, node.fn_decl.name)
+
+
+def analyze_effects(program):
+    """Return effectful function keys without changing the checked tree."""
+    bodies = {("fn", function.name): function.body for function in program.functions}
+    for struct in program.structs + program.generated_structs:
+        for method in struct.methods or []:
+            bodies[(struct.name, method.name)] = method.body
+    calls = {key: set() for key in bodies}
+    effects = set()
+
+    def scan(node, owner):
+        if isinstance(node, LambdaNode):
+            return  # Its generated call body is analysed separately.
+        if isinstance(node, (PrintNode, ReadNode, WhileNode)):
+            effects.add(owner)
+        # Methods have no info link; checked field writes are the checker's
+        # direct mutation seeds, including mutable captures.
+        if isinstance(node, AssignNode) and getattr(node, "is_this_field", False):
+            effects.add(owner)
+        if isinstance(node, (CallNode, MemberCallNode)):
+            callee = _call_key(node)
+            calls[owner].add(callee)
+            if getattr(node.fn_decl, "mutating", False):
+                effects.add(callee)
+        for child in children(node):
+            scan(child, owner)
+
+    for key, body in bodies.items():
+        scan(body, key)
+    for key in calls:
+        pending = list(calls[key])
+        seen = set()
+        while pending:
+            callee = pending.pop()
+            if callee == key:
+                effects.add(key)
+                break
+            if callee not in seen:
+                seen.add(callee)
+                pending.extend(calls[callee])
+    while True:
+        added = {key for key, callees in calls.items() if callees & effects} - effects
+        if not added:
+            return effects
+        effects.update(added)
+
+
+def has_effect(expr, effects):
+    if isinstance(expr, LambdaNode):
+        return False
+    if isinstance(expr, ReadNode):
+        return True
+    if isinstance(expr, (CallNode, MemberCallNode)):
+        if _call_key(expr) in effects or getattr(expr.fn_decl, "mutating", False):
+            return True
+    return any(has_effect(child, effects) for child in children(expr))
+
+
 class UseCounter(Walker):
     def __init__(self):
         self.reads = {}

@@ -446,3 +446,116 @@ Open questions: none
 Kept as-is: tests/opt/
 Changed by the student: README.md (deleted info about unit tests)
 Removed/rejected by the student: unit test (good - but not interested in realization, only in result)
+
+## [P9-J5a] Additional task, part A: effect analysis for calls without effects (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J5a — Additional task, part A: effect analysis for calls without effects.
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("ADDITIONAL TASK — CALLS WITHOUT EFFECTS"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (unit tests, tests/ok, tests/err, tests/opt, with and without REMOVE_UNUSED=1).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, ai_usage.txt.
+Do NOT edit other src files, README.md, test.sh or existing tests/opt files. Existing tests must stay green UNCHANGED.
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+This job implements ONLY effect analysis. Do NOT replace `has_call_or_read` in the existing optimization loop yet. Do NOT change which variables or functions `remove_unused` removes. Integration belongs to P9-J5b.
+
+Design (verify the facts with `rg -n` in src/semantic_checker.py first: MemberFnInfo has `.name`, `.struct_name`, `.mutating`, `.node`; MemberCallNode.fn_decl is a MemberFnInfo; global CallNode.fn_decl is a FnInfo without a body, so look the body up in `program.functions` by name; lambda bodies are the member function `call` of the structs in `program.generated_structs`):
+
+1. Function keys: ("fn", name) for global functions; (struct_name, member_name) for member functions and lambda `call`s (enumerate user structs and `program.generated_structs`).
+2. Per function, walk the body (do NOT descend into a nested LambdaNode body when analysing the enclosing function — declaring a lambda has no effect; the lambda's own `call` is analysed separately) and collect: direct effect = Print, ReadNode or WhileNode present; callees (global calls, this-calls, member calls, callable calls through `sugar`).
+3. Effect set as a FIXPOINT: start with (a) direct effects, (b) mutating member functions (`info.mutating`), (c) functions that can reach themselves in the call graph (direct or mutual recursion; conservatively treat recursion as potentially non-terminating). Then repeat: any caller of an effectful function becomes effectful, until nothing changes. A callable object's call is the call of its `call`. A call site of a mutating member function is an effect at the call site itself (keep it even when the result is unused).
+4. Implement the minimal helper(s) needed to compute the effect set and `has_effect(expr)` using that set. `has_effect(expr)` must be true if the expression contains read(), a call/member call to an effectful function, or a mutating member call. It must also inspect arguments (`quiet(loud(1))` is effectful). Keep these helpers separate from the existing pruning behavior for now. Avoid building a generic analysis framework if simple functions and dictionaries are sufficient.
+
+TDD: write failing unit tests first, derive expectations by hand. Test the effect analysis independently:
+- `square` and `quiet` from the spec are pure; `loud` is effectful because it prints.
+- A function calling `loud` is effectful through the call graph.
+- `quiet(loud(1))` has an effect because of its argument.
+- A mutating member function `bump` is effectful; a non-mutating `peek` is pure.
+- A function with a WhileNode is effectful.
+- A recursive function and mutually recursive functions are conservatively effectful.
+- A printing lambda is effectful; a pure lambda is not.
+- A mutating callable (`[mut n]` counter) is effectful.
+- A nested lambda body must not incorrectly make the enclosing function effectful merely because the lambda was declared.
+
+Acceptance: all new effect-analysis unit tests green; existing optimizer unit tests green; tests/opt unchanged and green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals). Verify that the existing `remove_unused` behavior has NOT changed. Do not modify old `.astc` expectations.
+
+Close-out: append one ai_usage.txt entry (ID P9-J5a, date 2026-11-06) using this prompt verbatim; no Git commands.
+Clarification from the student (verbatim): Keep a tree-only API; clarify how to obtain mutation info
+Files changed:
+- src/optimizer.py: added _call_key(node), analyze_effects(program) with a local scan() helper, and has_effect(expr, effects). Every pre-existing function and class, including has_call_or_read, UseCounter, Pruner and remove_unused, is textually unchanged.
+- tests/unit/test_optimizer.py: appended 11 test_effect_* methods for spec purity/printing and transitive callers, nested effectful arguments, mutating/pure/uncalled members, this-calls, WhileNode, global recursion and its caller, member recursion, printing/pure lambdas, mutable captures, independent nested-lambda analysis, read() in nested initializers and effectful call targets. Existing tests/expectations were not changed.
+- ai_usage.txt: appended this P9-J5a entry, preserving all earlier review records.
+What I did: Verified the authoritative PDF exists and read the additional-task requirements. Measured both full-runner baselines and the original unit suite before edits. Verified MemberFnInfo/FnInfo fields, call-site links, lambda generation, checked field-write flags and mutation settling with rg -n and targeted source reads. MemberFnNode has no attached MemberFnInfo, so I asked about accessing settled flags through checker.structs. The student required a tree-only API. Explained and implemented the tree-only route: settled info.mutating is available at call sites; checked AssignNode.is_this_field writes provide the same direct mutation seeds for methods without call-site metadata; call-graph propagation carries effects to callers. This includes mutable captures without editing the checker or nodes. Added failing tests before implementing helpers. The effect analysis enumerates global/user-member/generated-lambda bodies, skips nested LambdaNode bodies while scanning an enclosing body, builds a call graph, marks direct effects and mutations, detects functions that can reach themselves, then propagates effects to a fixpoint. has_effect checks read(), effectful callees, settled call-site mutation flags, arguments and receiver expressions; lambda declaration bodies are not executed effects. Kept these helpers entirely separate from pruning. Verified unchanged pruning ASTs, statistics and generated-struct lists on all 68 tests/ok + tests/opt programs, and verified every existing optimizer definition remains textually identical. Independently exercised analysis on all 68 checked programs: their AST dumps were unchanged and all 12 mutation-marked method instances from the checker were included in the inferred effect sets.
+Kept from existing code (deliberately untouched): all existing optimizer functions/classes and pruning rules; every existing unit test/expectation; all other src files; README.md; test.sh; all tests/opt files, including .astc snapshots; all previous student-review entries. The old conservative call/read retention remains active. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No P9-J5b integration, no replacement of has_call_or_read, no additional removals, no checker/node attachments and no generic analysis framework. Did not require checker.structs after the student's tree-only clarification. The initial new WhileNode test used an empty source block, which the parser rejects; corrected only that new source string to contain i32 dead{0} before implementing analysis. Its hand-derived expected effect stayed the same. No old expectations or compiler messages were changed. No dependency installation or unrelated edits.
+Needed elsewhere: none
+Verification:
+- Baseline before changes (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j5a-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j5a-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-baseline-flag.log
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-baseline-unit.log 2>&1
+  unit_rc=$?
+  tail -n 5 /tmp/practice9-j5a-baseline-unit.log
+  printf 'Baseline statuses: default=%s flagged=%s unit=%s\n' "$plain_rc" "$flag_rc" "$unit_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ] || [ "$unit_rc" -ne 0 ]; then exit 1; fi
+  Result: all statuses 0; each runner: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 27 passed, 0 failed; total 150 passed, 0 failed. Original unit suite: 25 passed, 0 failed.
+- TDD red phase, after correcting the new WhileNode source and before adding analysis helpers:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-unit-red.log 2>&1
+  rc=$?
+  rg '^Ran |^FAILED|AttributeError:|compilation error:' /tmp/practice9-j5a-unit-red.log
+  exit "$rc"
+  Result: status 1; 36 tests, 25 existing tests passed, 11 new tests errored solely because analyze_effects did not yet exist. No syntax/semantic errors remained in the new programs.
+- Final unit tests:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-unit.log 2>&1
+  rc=$?
+  tail -n 8 /tmp/practice9-j5a-unit.log
+  exit "$rc"
+  Result: status 0; 36 passed, 0 failed, including all original 25 tests and all 11 new effect-analysis cases. Expectations were derived by hand from the programs and spec.
+- Final unit tests with environment flag:
+  source ~/lcd/bin/activate
+  REMOVE_UNUSED=1 python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-unit-flag.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j5a-unit-flag.log
+  exit "$rc"
+  Result: status 0; 36 passed, 0 failed.
+- Both final full-runner modes:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j5a-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j5a-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0; BOTH modes: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 27 passed, 0 failed; total 150 passed, 0 failed. Existing output/error fixtures and all unchanged .astc/.defs comparisons pass.
+- Pruning behavior captured before edits and compared after adding helpers:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5a-snapshot.py > /tmp/practice9-j5a-behavior-before.json
+  [The command above ran before edits.]
+  python3 /tmp/practice9-j5a-snapshot.py > /tmp/practice9-j5a-behavior-after.json
+  cmp /tmp/practice9-j5a-behavior-before.json /tmp/practice9-j5a-behavior-after.json
+  Result: status 0; identical optimized AST dumps, stats dictionaries and generated-struct names/order for all 68 tests/ok + tests/opt programs.
+- Tree-only analysis and mutation coverage:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5a-analysis-check.py
+  Result: status 0; all 68 checked AST dumps unchanged by analyze_effects; all 12 settled mutating-method instances from checker metadata included by the tree-only analysis.
+- Existing-definition/protected-file integrity:
+  python3 /tmp/practice9-j5a-integrity.py
+  Result: status 0; every pre-existing optimizer function/class is textually unchanged; exactly _call_key, analyze_effects and has_effect added at module scope. All other src files, tests/opt fixtures, README, test.sh and other unit scripts match pre-edit checksums. Pruning snapshots remain identical.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: optimazer.py, test_optimizer.py
+Changed by the student: none
+Removed/rejected by the student: will be removed test_optimizer.py
