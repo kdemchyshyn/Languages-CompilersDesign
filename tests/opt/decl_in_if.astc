@@ -1,0 +1,6 @@
+Program
+  If
+    Bool true
+    Block
+  Exit
+    Const 7

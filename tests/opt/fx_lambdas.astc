@@ -1,0 +1,43 @@
+Program
+  Lambda printing -> i32
+    Struct lambda.printing
+      MemberFn call -> i32
+        Param a i32
+        Block
+          Print
+            Var a
+          Exit
+            Var a
+    Decl printing lambda.printing const
+  Lambda pure -> i32
+    Struct lambda.pure
+      MemberFn call -> i32
+        Param a i32
+        Block
+          Exit
+            Var a
+    Decl pure lambda.pure const
+  Decl n i32 const
+    Const 0
+  Lambda counter -> i32
+    Struct lambda.counter
+      Member n i32 mut
+      MemberFn call -> i32
+        Block
+          Assign n
+            BinOp +
+              Var n
+              Const 1
+          Exit
+            Var n
+    Decl counter lambda.counter mut
+      Var n
+  Decl a i32 const
+    CallableCall printing
+      Const 5
+  Decl c i32 const
+    CallableCall counter
+  Print
+    CallableCall counter
+  Exit
+    Const 0

@@ -1,0 +1,40 @@
+fn loop := () -> i32
+{
+    i32 mut n{0}
+    while n != 1
+    {
+        n := n + 1
+    }
+    exit n
+}
+fn recurse := (i32 n) -> i32
+{
+    i32 mut r{0}
+    if n != 0
+    {
+        r := recurse(n - 1)
+    }
+    exit r
+}
+fn first := (i32 n) -> i32
+{
+    i32 mut r{0}
+    if n != 0
+    {
+        r := second(n - 1)
+    }
+    exit r
+}
+fn second := (i32 n) -> i32
+{
+    i32 mut r{0}
+    if n != 0
+    {
+        r := first(n - 1)
+    }
+    exit r
+}
+i32 a{loop()}
+i32 b{recurse(2)}
+i32 c{first(2)}
+exit 0

@@ -1,0 +1,11 @@
+Program
+  Function first -> i32
+    Param used i32
+    Param unused i32
+    Block
+      Exit
+        Var used
+  Exit
+    Call first
+      Const 7
+      Const 99

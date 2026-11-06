@@ -1,0 +1,2 @@
+i32 unused{read()}
+exit 0

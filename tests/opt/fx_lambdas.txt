@@ -1,0 +1,20 @@
+fn printing := [](i32 a) -> i32
+{
+    print(a)
+    exit a
+}
+fn pure := [](i32 a) -> i32
+{
+    exit a
+}
+i32 n{0}
+fn counter := [mut n]() -> i32
+{
+    n := n + 1
+    exit n
+}
+i32 a{printing(5)}
+i32 b{pure(4)}
+i32 c{counter()}
+print(counter())
+exit 0

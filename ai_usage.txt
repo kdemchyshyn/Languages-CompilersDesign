@@ -1,802 +1,685 @@
-Practice 8 work summary (updated 2026-10-26)
-Tools verified in recorded work: Python 3.12.3, llvmlite 0.49.0, lli 18.1.3. J1 recorded model: Codex Sol 6.1; other job entries report that the model was not exposed.
-Jobs recorded as completed: J0, J1, J2, J3a, J3b, J3c, J4, J5, J6. Required entries missing: none.
-Recorded review fields: J1 “code chanes”; J2 “code”; J3a “Code + ai_usage”; J3b/J3c “code”; J4 “ai_usage”; J5 “Ok and err tests” kept and “Added .ast files, and some expected” changed; these entries report no removals.
-Final current test run: `source ~/lcd/bin/activate; ./test.sh` -> 123 passed, 0 failed; exit status 0.
+# AI usage log
 
-Planning/review assistance:
-Tool: Claude and ChatGPT
-Used for: decomposing the assignment into implementation jobs, drafting and
-refining prompts for the coding agent, interpreting review results, and
-checking whether reported test failures came from implementation issues or
-incorrect test expectations.
+Repository instructions (AGENTS.md; recorded once):
 
-Code taken as-is from ChatGPT/Claude: none.
-Direct source-code modifications by ChatGPT/Claude: none.
-Final implementation decisions and test-fixture corrections were reviewed by
-the student.
+# Codex repository instructions — Practice 9
 
-Codex wrote the code - I verified everything.
+## Project
+- Python compiler for a small language, generating LLVM IR via `llvmlite.ir`.
+- Source files in `src/`; test suite: `./test.sh`, using `tests/ok` and `tests/err`.
+- Historical baseline: **123 passed, 0 failed**. Measure the actual baseline before changes.
+- Authoritative specification: `docs/CS400_Practice_9.pdf` (verify that the file exists at this path in the actual repository). `docs/w08-practice.pdf` is background only.
+- Practice 9: Task 1 remove unused variables per declaration until stable; Task 2 remove unused global functions until stable; Task 3 add optimization tests and memory note; optional additional task analyze calls without observable effects. The optimizer transforms the checked AST, never generated LLVM IR.
+- Previous practices must keep working with identical output and error messages.
 
-## [J0] Environment and baseline check (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
+## Absolute Git restriction
+**Never run any Git command and never modify Git metadata.** This includes `git status`, `git diff`, `git log`, `git add`, `git commit`, `git checkout`, `git switch`, branch creation, merges, rebases, resets, tags, or touching `.git/` or `.git/info/exclude`. Do not automatically create commits, branches, PRs, or change remotes. The student handles ALL Git operations and reviews manually. To report edits, describe files/functions without Git commands.
 
-## Active file: src/compiler.py
+## Implementation rules
+1. Perform **only the current job**. Change only its expressly allowed files, plus `ai_usage.txt` for its entry. If another file needs an edit, report it under `Needed elsewhere`; do not change it.
+2. Generate LLVM IR only through `llvmlite.ir`; never assemble IR by concatenating textual LLVM instructions (printing `str(module)` is fine).
+3. Keep pre-existing compiler error wording, `--ast` output for existing nodes, and existing test behavior unchanged. Do not edit or regenerate existing `.expected`, `.ast`, or source tests to make a failure disappear.
+4. If the specification is materially ambiguous or contradicts these instructions, stop the affected work and ask for clarification. Do not silently invent language behavior.
+5. Derive new test expected outputs and error positions **by hand** from the program and spec before comparing with the compiler; never copy observed compiler output into `.expected`. On a discrepancy, report it; do not change the expected result to match a bug.
+6. Follow the existing code style and name conventions. Make minimal, relevant changes.
+7. Save context where practical: locate target functions with `rg -n`, then inspect relevant ranges, imports, and call sites; widen reading only when necessary to understand the change. Never sacrifice correctness for token savings. Keep chat summaries short.
+8. Source edits are allowed, test runs and file reads are allowed. Destructive shell operations or unrelated cleanup are not. Do not install dependencies without asking.
+9. Avoid claims about the student's review decisions. The student alone determines what was accepted, changed, or rejected.
 
-## Open tabs:
-- compiler.py: src/compiler.py
-- ai_usage.txt: ai_usage.txt
-- AGENTS.md: AGENTS.md
+## Testing
+- Before a job, run the existing suite and record actual totals; after editing, run it again.
+- Prefer Bash: `set -o pipefail; ./test.sh > /tmp/practice9-tests.log 2>&1; rc=$?; tail -n 8 /tmp/practice9-tests.log; exit "$rc"`. This preserves failure status and only prints a short tail. If the project uses another shell, use an equivalent command that preserves the exit status.
+- When something fails, read only the relevant sections of the log; distinguish pre-existing failures from regressions. Fix regressions only within the job's authorized files; otherwise stop and report.
+- For P9-J1, failing new optimization tests are intentional TDD red tests, but the existing `tests/ok` and `tests/err` must remain green, both with and without `REMOVE_UNUSED=1`. Report new red tests separately; never conceal a regression.
+- For P9-J2 onward, new tests relevant to the completed stages must turn green. Verify that `--remove-unused` does not change stdout, errors, or program exit status.
+- For P9-J5, the optional effect analysis might change optimized AST snapshots. Do not silently rewrite earlier `.astc` fixtures; explain any incompatibility and identify a minimal correction or test redesign for student review.
 
-## My request:
-JOB J0. Allowed file: ai_usage.txt. No source changes. No Git commands or Git metadata changes.\
-\
-1\. Read AGENTS.md and verify docs/w08-practice.pdf is accessible. Identify essential tools (python3, lli, llvmlite), without installing anything.\
-2\. Run ./test.sh and record actual baseline totals and its exit status; report any difference from 82 passed / 0 failed.
+## `ai_usage.txt` — required close-out for every job
+- Append **one** entry to `ai_usage.txt` before finishing, unless the job explicitly says to only update an earlier review entry.
+- Use the **exact prompt text provided by the student**, including the job body, in `Prompt (verbatim)`. Do not reproduce this `AGENTS.md` as part of every prompt; its contents belong in the header once.
+- Log the actual model only if known; otherwise say `Codex (model not exposed)` rather than guessing.
+- Entry format:
 
-3. Check ai_usage.txt is accessible\
-   \
-   Finish with the standard AGENTS.md close-out.\
-   Do not branch, stage, commit, or execute any Git command.
-Files changed: ai_usage.txt — appended this J0 entry; no functions/classes changed.
-What I did: Read AGENTS.md; verified the PDF is readable (header %PDF-1.7) and ai_usage.txt is readable; identified /usr/bin/python3 (3.12.3) and /usr/bin/lli (Ubuntu LLVM 18.1.3); checked llvmlite import; ran the existing suite.
-Kept from existing code (deliberately untouched): All source files, tests, expected outputs, and repository instructions.
-Considered but NOT done / rejected (with reason): No dependency installation (not authorized); no source changes (outside J0 scope); no Git commands or metadata changes.
-Needed elsewhere: llvmlite must be made available to the python3 used by test.sh before a functional compiler baseline can be measured; no installation performed.
-Verification: Read/check commands: pwd; cat AGENTS.md; ls -l docs/w08-practice.pdf ai_usage.txt; command -v python3; command -v lli; python3 -c 'import sys, llvmlite; print("Python:", sys.version.split()[0]); print("llvmlite:", llvmlite.__version__)' (import failed: ModuleNotFoundError: No module named 'llvmlite'). Also: sed -n '1,180p' test.sh; python3 --version; lli --version; python3 -c 'from pathlib import Path; p=Path("docs/w08-practice.pdf"); print("PDF readable:", p.open("rb").read(8)); print("ai_usage.txt readable:", Path("ai_usage.txt").read_text() == "")'. Baseline command: set -o pipefail; ./test.sh > /tmp/practice8-tests.log 2>&1; rc=$?; tail -n 8 /tmp/practice8-tests.log; exit "$rc"
-Baseline result: 0 passed, 82 failed; exit status 1. Difference from historical 82 passed / 0 failed: 82 fewer passes and 82 more failures. Inspected failure excerpts using sed -n '1,24p' /tmp/practice8-tests.log; missing llvmlite prevents compiler startup. Post-entry verification command: set -o pipefail; ./test.sh > /tmp/practice8-tests-after.log 2>&1; rc=$?; tail -n 8 /tmp/practice8-tests-after.log; exit "$rc". Result: 0 passed, 82 failed; exit status 1; same missing llvmlite error. No regression from the measured baseline.
-Open questions: none
+```text
+## [JOB-ID] Title (YYYY-MM-DD)
+Tool/model: ...
+Prompt (verbatim): ...
+Files changed: <per file, functions/classes added or modified>
+What I did: ...
+Kept from existing code (deliberately untouched): ...
+Considered but NOT done / rejected (with reason): ...
+Needed elsewhere: ... or none
+Verification: <exact commands, totals, relevant output>
+Open questions: ... or none
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: none
-Changed by the student: none
-Removed/rejected by the student: none
+Kept as-is: PENDING REVIEW
+Changed by the student: PENDING REVIEW
+Removed/rejected by the student: PENDING REVIEW
+```
 
-## [J0 follow-up] Baseline in the existing virtual environment (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
+- Do not fill or alter `STUDENT REVIEW` fields based on your own assumptions. You may update them **only** if the student explicitly gives you evidence and instructions for the specific review job; otherwise leave `PENDING REVIEW`.
+- **Never run Git in any close-out step.** Finish with a concise changed-files summary, test totals, and any blockers. The student inspects changes and commits personally.
 
-## Active file: src/compiler.py
 
-## Open tabs:
-- compiler.py: src/compiler.py
-- ai_usage.txt: ai_usage.txt
-- AGENTS.md: AGENTS.md
-
-## My request:
-Try work in run:
-source ~/lcd/bin/activate
-./test.sh
-Files changed: ai_usage.txt — appended this follow-up entry; no functions/classes changed.
-What I did: Activated the existing ~/lcd environment in the test shell, confirmed Python 3.12.3 and llvmlite 0.49.0, and ran the suite.
-Kept from existing code (deliberately untouched): All source files, tests, expected outputs, instructions, and prior usage entry.
-Considered but NOT done / rejected (with reason): Dependency installation was unnecessary; source changes were outside scope. No Git commands or Git metadata changes.
-Needed elsewhere: none; use source ~/lcd/bin/activate before running the suite.
-Verification: Exact initial shell commands:
-source ~/lcd/bin/activate
-python3 --version
-python3 -c 'import llvmlite; print("llvmlite:", llvmlite.__version__)'
-set -o pipefail
-./test.sh > /tmp/practice8-tests-venv.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-tests-venv.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Matches historical baseline exactly. The earlier failure was specific to the unactivated Python environment.
-Post-edit verification: exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-tests-venv-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-tests-venv-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Open questions: none
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: None
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J1] Callable object semantic sugar (2026-10-26)
-Tool/model: Codex Sol 6.1
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/compiler.py
-
-## Open tabs:
-- compiler.py: src/compiler.py
-- ai_usage.txt: ai_usage.txt
-- AGENTS.md: AGENTS.md
-
-## My request:
-JOB J1. Allowed files: src/nodes.py, src/semantic_checker.py, src/code_generator.py, plus ai_usage.txt. No Git commands.
-
-Spec: Task 1 of docs/w08-practice.pdf. This is semantic sugar; parser stays untouched.
-
-nodes.py:
-- CallNode: set self.sugar = None in __init__. In dump, show "CallableCall <func_name>" when sugar is non-None, otherwise preserve "Call <func_name>"; dump args in both cases, never the rewritten target.
-- MemberCallNode: set self.callable_label = None in __init__. If set, dump "CallableCall <label>" and args only; otherwise preserve current output exactly.
-
-semantic_checker.py:
-- find_variable(name) -> type name or None, no errors/side effects: lookup_local then current_struct.fields, same ordering as visit_var.
-- function_visible(name): global function, or current struct method except when current struct is a lambda (use getattr(..., "is_lambda", False) until J3a).
-- require_callable(node, label, type_name): built-in i32/i64/bool -> "'{label}' is not callable: it is {type_name}"; struct without method call -> "'{label}' is not callable: {type_name} has no member function 'call'".
-- visit_callable(node): create VarNode(line, col, func_name), visit and require callable, create MemberCallNode(line, col, target, "call", args), set its callable_label, visit it, assign node.sugar and node.type, return type.
-- At start of visit_call: if find_variable(func_name) exists, report collision when function_visible is true ("'{name}' is both a variable and a function: rename one of them"), otherwise visit_callable; keep prior path unchanged.
-- In visit_member_call just after target_type = node.target.accept(self), if node.name names a FIELD of that struct, rewrite obj.name(args) to obj.name.call(args):
-  * VarNode -> FieldNode with base_name and [node.name], preserving source/dot positions;
-  * FieldNode with base_name -> append node.name to fields;
-  * FieldNode with target -> append field preserving target;
-  * CallNode/MemberCallNode target -> FieldNode with target and [node.name].
-  Set callable_label to dotted variable/field path or simply field name for call-result bases; set node.name = "call"; replace target; re-visit target; require_callable. Leave the rest of the existing argument/type/mutation logic unchanged.
-- Only for callable_label, wrong-argument-count message should name that callable object. In verify_member_call_mutation use "cannot call '{label}': its 'call' changes it, and it is not mut" when appropriate. Existing normal member errors must be unchanged. Errors at the call-name position.
-
-code_generator.py:
-- First in visit_call: if getattr(node, "sugar", None) is not None: return node.sugar.accept(self). No other code-generation changes.
-
-Verify: baseline tests; Task 1 sheet program via lli outputs 42, 42, 14, 10, Counter{n: 2}, "Program exit with result 12"; --ast (parse tree) still displays "Call triple"; check the two IR calls generated by triple(14) vs triple.call(14), ignoring SSA numbers; manually check four errors (missing call, i32 call, name collision, const Counter mutating) and line:col. Report existing tests that would now have name collisions; do not edit them.
-
-Append the J1 ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/nodes.py: CallNode.__init__/dump and MemberCallNode.__init__/dump; added sugar/callable_label defaults and checked-tree callable dumps without rewritten targets.
-- src/semantic_checker.py: added find_variable, function_visible, require_callable, visit_callable; modified visit_call, visit_member_call, verify_member_call_mutation for callable dispatch, field rewrites, collisions, labeled arity/mutation diagnostics, and called-field positions derived from the dot.
-- src/code_generator.py: visit_call delegates to node.sugar when present; no other code-generation changes.
-- ai_usage.txt: appended this J1 entry.
-What I did: Read AGENTS.md and Task 1 of the authoritative PDF. Since pdftotext was unavailable, extracted/decompressed the PDF's existing text streams and decoded their embedded character maps with a temporary standard-library Python script; installed nothing. Implemented semantic rewrites using the existing MemberCallNode constructor's actual name-before-target signature. Preserved CRLF source line endings. Wrote hand-derived verification fixtures and expected diagnostics under /tmp/practice8-j1 before comparing compiler output. Checked parse-tree and semantic-tree dumps, both requested IR calls, four requested errors, all four field/call-result rewrite paths and widening, extra primitive/arity diagnostics, and existing-test collisions.
-Kept from existing code (deliberately untouched): Parser, lexer, compiler CLI, all repository tests and expected/AST files, existing normal function/member-call paths and messages, argument type checking, mutation propagation and path checks, and all other code generation. No Git commands or Git metadata changes.
-Considered but NOT done / rejected (with reason): No lambda implementation (later jobs); no dependency installation (existing ~/lcd environment suffices); no new repository tests (not allowed for J1). Did not change expected output to accommodate a discrepancy. Temporary verification harness initially assumed CompileError was an exception and initially used an unsupported compound exit expression; corrected only that harness/fixture, without changing compiler behavior or the hand-derived diagnostic expectation.
-Needed elsewhere: src/parser.py would need to retain the called member identifier's line/column to give exact positions with whitespace after a dot. It currently stores receiver and dot positions only. Callable field errors use dot_col + 1, correct for contiguous dot/name. Confirmed discrepancy: print(s.  side()) on sheet line 34 should report 34:11, but reports 34:9. Parser remains untouched as expressly required; no source-reading workaround introduced.
-Verification:
-All compiler/test commands below used source ~/lcd/bin/activate (Python 3.12.3, llvmlite 0.49.0; lli 18.1.3).
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j1-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j1-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j1-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j1-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No baseline regression.
-Sheet commands: python3 src/compiler.py /tmp/practice8-j1/sheet.txt /tmp/practice8-j1/sheet.ll; lli /tmp/practice8-j1/sheet.ll > /tmp/practice8-j1/sheet.actual; cmp /tmp/practice8-j1/sheet.expected /tmp/practice8-j1/sheet.actual; python3 src/compiler.py --ast /tmp/practice8-j1/sheet.txt > /tmp/practice8-j1/sheet.ast; rg -n 'Call triple|Scale_call' /tmp/practice8-j1/sheet.ast /tmp/practice8-j1/sheet.ll.
-Sheet output exactly: 42, 42, 14, 10, Counter{n: 2}, Program exit with result 12 (one per line). Parse-tree AST contains Call triple. Both IR calls normalize to: call i32 @"Scale_call"(%"Scale"* %"triple", i32 14).
-Harness commands: python3 /tmp/practice8-j1/check.py > /tmp/practice8-j1/check.log 2>&1; python3 /tmp/practice8-j1/extra-check.py. Both corrected harnesses exit 0. CLI checks validate exit status 1 and exact diagnostic including compilation error prefix:
-- missing call: line 6:6: 'p' is not callable: Point has no member function 'call'
-- i32: line 2:6: 'n' is not callable: it is i32
-- collision: line 6:6: 'twice' is both a variable and a function: rename one of them
-- const Counter: line 11:6: cannot call 'c': its 'call' changes it, and it is not mut
-Additional checks: callable arity at 32:7 names triple; field arity at 34:9 names s.scale; i32 field at 34:9 names s.side; bool/i64 objects produce the requested built-in diagnostics. Existing tests encountering new name collisions: none. Checked semantic dumps show CallableCall for triple, s.scale, scale and c, while explicit .call retains MemberCall call.
-Path commands: python3 src/compiler.py /tmp/practice8-j1/paths.txt /tmp/practice8-j1/paths.ll; lli /tmp/practice8-j1/paths.ll > /tmp/practice8-j1/paths.actual; cmp /tmp/practice8-j1/paths.expected /tmp/practice8-j1/paths.actual. Result: 12, 15, 18, 21, Program exit with result 0, covering a nested variable field, function-result field, member-result field, and field on a call-result field with i32-to-i64 argument widening.
-Known-position-limitation command: python3 src/compiler.py /tmp/practice8-j1/spaced-field.txt /tmp/practice8-j1/spaced-field.ll. Exit status 1; expected 34:11 but observed 34:9; recorded under Needed elsewhere rather than changing the expectation.
-Open questions: Exact called-field positions after whitespace require parser metadata outside J1's allowed scope.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code chanes
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J2] Lambda syntax and exact callable-field positions (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/code_generator.py
-
-## Open tabs:
-- code_generator.py: src/code_generator.py
-
-## My request:
-JOB J2. Allowed files: src/lexer.py, src/nodes.py, src/parser.py, src/compiler.py, src/semantic_checker.py, plus ai_usage.txt. No Git commands.
-
-Spec: Task 2 syntax in docs/w08-practice.pdf.
-
-IMPORTANT J1 COMPATIBILITY FIX:
-A minor diagnostic-position bug remains from J1 and should be fixed as part of this job because J2 already modifies parser/AST metadata.
-
-Currently callable-field rewriting in semantic_checker.py derives the member/call-name column as dot_col + 1. This is wrong when whitespace appears after '.', e.g. `s.  side()`: if `side` starts at column 11, the diagnostic may incorrectly report column 9.
-
-Fix this properly using parser/AST source metadata:
-- Preserve the actual source position (line/column) of the member identifier when parsing member access/calls.
-- Use that preserved member-name position in semantic_checker.py when a callable field/member call is rewritten and its diagnostic location is needed.
-- Do NOT derive the identifier position from dot_col + 1.
-- Preserve all existing behavior for ordinary member calls and J1 callable-field rewriting.
-- Verify at minimum that a callable-field diagnostic for `s.  side()` points to the actual start of `side`, not the position immediately after '.'.
-- Also check multiple spaces and, if naturally supported by the lexer/parser, tabs after '.'.
-- Keep this fix narrowly scoped. Do not otherwise redesign or refactor J1.
-
-lexer.py:
-- In START add '[' as Token("lbracket", "[", line, col) and ']' as Token("rbracket", "]", line, col), matching parentheses.
-- Check whether an existing error test depends on '[' or ']' being an unexpected byte; report, do not change the test.
-
-nodes.py:
-- CaptureNode(Node): fields (line, col, name, mutable); source position is identifier, not mut; dump "Capture k" / "Capture mut k".
-- LambdaNode(StmtNode), defined after StmtNode: (line, col, name, captures, params, return_type, body, name_line, name_col); fields struct=None, decl=None; accept via visitor.visit_lambda(self).
-- Dump "Lambda <name> -> <return_type>"; before checking dump captures, params, body; after checking dump its synthesized struct and decl at indent+1 (as in spec).
-- ProgramNode.generated_structs = []; do not print in ProgramNode.dump.
-
-parser.py:
-- First refactor parse_fn by extracting parse_signature_tail(), beginning at '(' and handling params, ')', '->', return type, end-of-line, '{' on its own line, parse_block("fn"), and required final exit. Return (params, return_type, body). Preserve all prior messages.
-- is_lambda_start(): len(self.toks) > 3, first token keyword "fn", fourth token kind "lbracket".
-- parse_program: exclude lambda starts from the ordinary function loop, permit lambda starts as statements, retain existing error for normal function declaration after statements.
-- parse_statement: when fn+lambda start, call parse_lambda (consumes lines); otherwise old error.
-- parse_lambda: fn, name (with existing reserved-name check), ':=', '[', zero or more captures (optional 'mut', identifier, commas), ']', parse_signature_tail; construct LambdaNode with both name coordinates.
-- parse_fn(is_member=True): '[' after ':=' raises at that token "a capture list is only allowed on a lambda, not on a member function".
-- While touching member parsing, preserve the actual member identifier source coordinates needed by the J1 compatibility fix above. Do not approximate them from the dot position.
-
-semantic_checker.py:
-- Only modify what is necessary for the J1 diagnostic-position compatibility fix described above.
-- In particular, update callable-field/member-call rewriting to use the actual preserved member identifier position rather than dot_col + 1.
-- Do not make unrelated semantic changes and do not implement J3 functionality here.
-
-compiler.py:
-- Add --ast-checked flag.
-- After ordinary --ast early-exit and before checking for required output filename, execute SemanticChecker().visit_program(program), program.dump(), and exit 0.
-- Keep --ast behavior unchanged.
-
-VERIFY:
-1. Run the baseline test suite and report exact passed/failed counts.
-2. Parse AST for the Task 2 sheet program and verify Lambda, Capture, Param, and Block structure.
-3. Verify unchanged rejection of `fn f := (...)` inside a block.
-4. Verify the J1 callable-field diagnostic position with whitespace after '.', specifically a case such as `s.  side()`. The reported position must be the actual start of `side`.
-5. Check that ordinary member-call diagnostics/behavior remain unchanged.
-6. Full --ast-checked of lambda programs is NOT expected to work until J3a/J3b; report that honestly, not as an existing-test regression.
-
-If an existing error test depends on '[' or ']' being an unexpected byte, report it but DO NOT modify that test.
-
-Append a J2 ai_usage entry describing:
-- Task 2 changes,
-- the J1 diagnostic-position compatibility fix,
-- tests/verification performed,
-- any known limitations.
-
-Summarize changed files, verification results, and any remaining issues.
-
-No Git commands.
-Files changed:
-- src/lexer.py: lex START recognizes lbracket/rbracket at their actual source positions.
-- src/nodes.py: added CaptureNode and LambdaNode constructors/dumps and LambdaNode.accept; ProgramNode.__init__ initializes generated_structs (not dumped); FieldNode and MemberCallNode constructors retain optional name_line/name_col metadata without altering existing dump output.
-- src/parser.py: extracted parse_signature_tail from parse_fn without changing prior signature/body errors; added is_lambda_start and parse_lambda; updated parse_program/parse_statement to accept lambdas as statements; parse_fn rejects member capture lists at '['; member access/call parsing stores actual final member identifier coordinates.
-- src/compiler.py: added --ast-checked argument and early checked-tree dump path after --ast and before the required output check.
-- src/semantic_checker.py: visit_member_call only; replaced dot-based position approximation with preserved name_line/name_col for callable-field rewrites and retained that metadata on the synthesized field target. No lambda semantics or other J1 redesign.
-- ai_usage.txt: appended this J2 entry.
-What I did: Read AGENTS.md and Task 2 syntax/rewrite text from the authoritative PDF extraction produced during J1 (the PDF remains accessible). Implemented syntax-only lambda parsing including empty/multiple/mut captures, parameter lists, required final exit, and nesting in all statement contexts. Capture coordinates identify the captured identifier rather than mut. Lambda dumps use captures/params/body before semantic rewriting, or struct/decl once those fields are supplied. Fixed the J1 whitespace diagnostic bug using parser-provided identifier coordinates. Preserved CRLF source line endings. Created only temporary verification fixtures/harnesses under /tmp/practice8-j2, with expected AST fragments and errors/positions derived by hand before comparisons.
-Kept from existing code (deliberately untouched): src/code_generator.py; all repository tests, .expected and .ast files; existing --ast parse-tree early exit; ordinary function/member signature parsing wording; ordinary member-call diagnostic positions and behavior; argument and mutation logic; all other semantic behavior. Previous usage entries and student review fields left unchanged. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No visit_lambda semantic checking/synthesis, lambda execution/code generation, capture validation, or other J3 work (explicitly deferred). No dependency installation. No changes to existing tests, including bracket-related expectations. Search found no existing error test depending on '[' or ']' being an unexpected byte.
-Needed elsewhere: J3a/J3b must implement lambda semantic checking and synthesis before lambda --ast-checked can succeed; later lambda code generation is also outside J2. The J1 whitespace-position limitation is resolved in this job.
-Verification:
-Environment: source ~/lcd/bin/activate; existing Python 3.12.3 and llvmlite 0.49.0; lli 18.1.3. No installation.
-Bracket dependency check command: rg -n '\[|\]' tests/err/*.txt tests/err/*.expected (no matches).
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j2-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j2-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0, matching historical baseline.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j2-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j2-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No existing-test regression.
-Targeted verification exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j2/check.py > /tmp/practice8-j2/check.log 2>&1
-rc=$?
-tail -n 24 /tmp/practice8-j2/check.log
-exit "$rc"
-Result: exit status 0; all targeted checks passed. The harness invokes src/compiler.py via the activated interpreter and checks return codes, hand-derived AST fragments, and exact diagnostics. Task 2 sheet AST is in /tmp/practice8-j2/sheet.ast. Verified Lambda times nested inside sum_scaled with Capture factor, Param v i32, Block, expected expression tree; top-level Lambda add_k with Capture k, Param y i32, Block. Verified times name/capture positions 8:8 / 8:18 and add_k 17:4 / 17:14. Mutable capture k in the separate fixture is at 1:14 (identifier, not mut). Empty/multiple captures and multiple parameters parse. Lambdas parse inside a function, member, if, while, and another lambda. Verified checked LambdaNode dump using supplied existing AST nodes, visitor dispatch, bracket token positions, and generated_structs omission from ProgramNode.dump.
-Exact CLI diagnostic checks (all exit 1, with unchanged compilation error prefix):
-- Ordinary fn in a block: 3:5, function/struct declaration is not allowed after statements or inside a block.
-- Ordinary fn after lambda statements: 5:1, function declaration is not allowed after statements.
-- Member capture list: 4:13, a capture list is only allowed on a lambda, not on a member function.
-- Reserved lambda name print: 1:4; reserved capture read after mut: 1:14; both retain built-in-name rejection.
-- Lambda missing final exit: 2:1, function block must end with an exit statement.
-- Callable i32 field print(s.  side()): 10:11, 's.side' is not callable: it is i32. Five spaces -> 10:14; tab -> 10:10; mixed space/tab -> 10:13, matching lexer source-column accounting. Also verified field access metadata itself.
-- Ordinary missing method after two spaces remains at receiver position 10:7; ordinary wrong method arity remains at 10:7; primitive member error remains at dot position 2:8.
-- Existing J1 sheet --ast-checked succeeds without an output filename and retains CallableCall triple/s.scale. Combined --ast --ast-checked on the lambda sheet still prints the parse tree and exits 0, preserving --ast precedence.
-- Lambda sheet --ast-checked exits nonzero with AttributeError for missing visit_lambda; expected at this intermediate syntax-only stage. Captured stderr: /tmp/practice8-j2/sheet.checked.stderr. This is not an existing-test regression.
-Additional inline Python subprocess verification in the activated environment compiled /tmp/practice8-j2/j1-spaced-sheet.txt to /tmp/practice8-j2/j1-spaced-sheet.ll, executed lli, and compared against the hand-derived J1 sheet output: 42, 42, 14, 10, Counter{n: 2}, Program exit with result 12. This program uses multiple spaces on callable-field/ordinary-method calls and a tab on the explicit .call. It retains all six output lines. Recompiled the exact prior J1 discrepancy fixture /tmp/practice8-j1/spaced-field.txt; now reports line 34:11, matching its original hand-derived expectation (previously 34:9).
-Open questions: none; full lambda checking/execution remains intentionally deferred to later jobs.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J3a] Lambda semantics and lowering (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/semantic_checker.py
-
-## Open tabs:
-- semantic_checker.py: src/semantic_checker.py
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-- lexer.py: src/lexer.py
-- compiler.py: src/compiler.py
-
-## My request:
-JOB J3a. Allowed file: src/semantic_checker.py plus ai_usage.txt. Depends on J1/J2. No Git commands.
-
-Spec: Task 2, focusing on semantics and lambda lowering; value restrictions are J3b and LLVM generation is J3c.
-
-Infrastructure:
-1. StructInfo.is_lambda = False; module-level is_lambda_type(t) -> isinstance(t,str) and t.startswith("lambda.").
-2. Checker __init__: program=None, lambda_stack=[], lambda_names={}, settled=False.
-3. Extract Pass 3b mutation fixed-point propagation and pending-member-call verification into settle(): run propagation until stable, verify pending calls, clear the list. In visit_program set self.program=node, call settle at previous Pass 3b location, and set self.settled=True after it. Do not change existing behavior.
-4. fresh_lambda_name(name): first "lambda.NAME", subsequent "lambda.NAME.2", "lambda.NAME.3", etc.
-5. function_visible should use current struct's is_lambda, not getattr.
-
-Implement visit_lambda in this sequence:
-1. Process captures with seen set: duplicate error "'{name}' is captured twice"; capture named "call" error "a capture cannot be named 'call'"; missing visible variable error "cannot capture '{name}': no variable '{name}' is visible here". For each valid capture, construct VarNode at capture identifier position, check its type, make FieldDeclNode(name,type,mutable), save VarNode in init list.
-2. Param whose name is a capture -> "parameter '{name}' has the same name as a capture" at parameter.
-3. Generate MemberFnNode("call", params, return_type, body) and StructNode with fresh lambda name and capture fields; visit_struct and register_struct_methods; set structs[st.name].is_lambda=True, append st to program.generated_structs.
-4. Push (lambda_name, outer_scopes, outer_current_struct) on lambda_stack; visit_member_fn; pop in a finally-safe manner.
-5. If already settled, call settle() to finalize mutating calls before this closure can be called.
-6. Synthesize DeclNode at lambda name coordinates, type st.name, mutable iff any capture is mut, InitListNode of captured values. Set decl.is_closure=True; visit_decl; set node.struct and node.decl. Declare closure AFTER its body, preventing recursion.
-
-Scope rules:
-- not_captured(node,name): for top lambda_stack entry, if name is in immediately enclosing scopes or outer struct fields, emit "'{name}' is not captured by lambda '{lam}': add it to the capture list, [{name}]".
-- Invoke before final used-before-declaration errors in visit_var, visit_assign, visit_field; before unknown-function error in visit_call. Do not turn genuinely unknown names into capture errors.
-- In visit_assign lambda field branch, before generic const-field message, const capture assignment -> "cannot assign to '{name}': the capture '{name}' is const, write [mut {name}]".
-- In visit_call skip current-struct method resolution when current_struct.is_lambda, so bare call(...) cannot call itself.
-
-Verify that existing baseline tests still pass, that the new semantic tree matches the sheet's Lambda/Struct/MemberFn/Decl shape, and that obvious missing/duplicate capture errors have correct positions. Do not attempt or claim successful lambda execution before J3c. Only fix src/semantic_checker.py issues; list other needs in ai_usage.
-
-Append J3a ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/semantic_checker.py: imported FieldDeclNode; added module-level is_lambda_type; initialized StructInfo.is_lambda and checker program/lambda_stack/lambda_names/settled state; extracted settle and updated visit_program; added fresh_lambda_name, not_captured, visit_lambda; updated function_visible, visit_var, visit_assign, visit_field, and visit_call for lambda scopes/capture diagnostics and method resolution; made visit_member_fn body-context restoration finally-safe for lambda body errors.
-- ai_usage.txt: appended this J3a entry.
-What I did: Read repository instructions and the authoritative Task 2 text extracted from docs/w08-practice.pdf during J1 (PDF remains accessible). Implemented capture validation, generated lambda struct/call method registration, checked lambda bodies in isolated member scopes, and synthesized/declared closure variables after body checking. Captures retain their source-identifier bindings in closure initializers; generated declarations use lambda-name positions. Added collision-free generated names, immediate-enclosing-scope missing-capture diagnostics, const-capture assignment diagnostics, and mutation settling for generated methods before closures can be called. Used existing AST constructor argument ordering. Preserved CRLF line endings. Created verification fixtures/harnesses only under /tmp/practice8-j3a with expected AST fragments and diagnostics derived by hand before comparison.
-Kept from existing code (deliberately untouched): Parser, AST classes/dump code, lexer, compiler CLI, src/code_generator.py, all repository tests/expected/AST files, ordinary non-lambda error messages and resolution, J1 callable rewrites and J2 identifier position metadata. Earlier usage entries and student review fields left unchanged. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No J3b lambda value restrictions or J3c LLVM work; no lambda generation/execution attempted or claimed. No dependency installation, source changes outside src/semantic_checker.py, or repository test changes. is_lambda_type is provided for later restrictions without imposing them in J3a.
-Needed elsewhere: J3b must add the deferred lambda value restrictions (passing/returning/assigning/printing/explicit external capture access, etc.); J3c must teach code generation to emit generated structs/methods and closure declarations. No other blockers found for J3a.
-Verification:
-All test/check commands used source ~/lcd/bin/activate (existing Python 3.12.3, llvmlite 0.49.0).
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3a-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3a-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3a-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3a-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Matches baseline; no existing-test regression.
-Sheet checked-AST command: python3 src/compiler.py --ast-checked /tmp/practice8-j2/sheet.txt > /tmp/practice8-j3a/sheet.checked.ast (exit 0). Matches hand-derived Lambda add_k -> Struct lambda.add_k -> Member k i32 const / MemberFn call -> Param y i32 / Block, followed by Decl add_k lambda.add_k const / Var k. Nested times similarly becomes Struct lambda.times, capture field factor, MemberFn call, and its closure Decl; calls dump CallableCall. No LLVM generation invoked.
-Targeted exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3a/check.py > /tmp/practice8-j3a/check.log 2>&1
-rc=$?
-tail -n 24 /tmp/practice8-j3a/check.log
-exit "$rc"
-Result: exit status 0; all targeted checks passed. Hand-derived expected sheet fragments are in /tmp/practice8-j3a/sheet.fragments.expected. Verified generated_structs order lambda.times/lambda.add_k, captured initializer binding to the original k declaration, declaration position 17:4, closure/type flags, method body reuse, settled state and cleared pending calls.
-Exact CLI errors (all checked with --ast-checked; exit 1 and exact compilation error prefix/wording):
-- Missing capture use: 19:11, 'k' is not captured by lambda 'add_k': add it to the capture list, [k].
-- Duplicate capture: 17:17, 'k' is captured twice.
-- Invisible capture: 8:26, cannot capture 'k': no variable 'k' is visible here.
-- Const capture assignment: 19:5, cannot assign to 'k': the capture 'k' is const, write [mut k].
-- Capture/parameter collision: 17:17, parameter 'k' has the same name as a capture (existing ParamNode position begins at the type).
-- Missing capture assignment: 19:5, expected capture diagnostic.
-- Genuinely unknown variable/function: 19:11, retain used-before-declaration / unknown-function diagnostics rather than capture errors.
-- Capture named call: 2:10, a capture cannot be named 'call'.
-- Recursive f(): 3:10, unknown function 'f'; bare call(): 3:10, unknown function 'call'.
-- Missing enclosing variable field access: 8:10; missing enclosing callable: 7:10; both use missing-capture messages.
-- A grandparent k invisible to the immediate enclosing lambda remains a genuinely unknown variable at 6:14; when immediately enclosing lambda captures k, the inner lambda gets a missing-capture diagnostic at 6:14.
-Additional targeted assertions: sibling scopes generate lambda.f, lambda.f.2, lambda.f.3; mutable scalar captures make the closure mutable and call method mutating; another closure can be captured and called via existing J1 machinery; global function named call stays resolvable inside a lambda; lambda stack, scopes, current_struct and current_member_fn restore after a body diagnostic.
-Mutation exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3a/mutation-check.py
-Result: exit 0. Verified fixed-point propagation Counter.call -> Counter.bump -> direct mutation, and propagation into lambda.f when the lambda is declared both before the original settling pass (inside a user member) and after it (top level). Pending calls clear. A Host member capturing its field by mutable copy remains nonmutating itself. Removing mut from the captured Counter reports the required callable mutation error at 17:10 (late case) and 21:18 (early case). Missing enclosing struct-field capture also reports correctly at 21:18. Semantic checks only.
-Open questions: none; J3b value restrictions and J3c LLVM generation remain intentionally pending.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: Code + ai_usage
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J3b] Restrictions on unnamed lambda values (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: ai_usage.txt
-
-## Open tabs:
-- ai_usage.txt: ai_usage.txt
-- semantic_checker.py: src/semantic_checker.py
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-- lexer.py: src/lexer.py
-
-## My request:
-JOB J3b. Allowed file: src/semantic_checker.py plus ai_usage.txt. Depends on J3a. No Git commands.
-
-Spec: Task 2's restrictions on unnamed lambda types; avoid changing diagnostics for old constructs.
-
-Lambda values (type starts with "lambda.") cannot be used as ordinary first-class values except synthesized closure initialization or a legal capture:
-- In visit_call and visit_member_call (including rewritten callable calls), for a lambda-valued VarNode argument: error at argument "'{name}' is a lambda and cannot be passed to '{callee}': its type has no name, so no parameter can have it". Callee should be the shown object name / function name, not an internal "call" label.
-- visit_exit, before existing exit checks: "cannot exit with '{name}': it is a lambda, and its type has no name".
-- visit_print, before existing struct printing: "cannot print '{name}': it is a lambda" (position of printed argument).
-- visit_assign, when final assignment target has lambda type: "cannot assign to '{name}': it is a lambda".
-- visit_decl / check_initializer for user declarations, but NOT generated decl with is_closure=True: reject an initializer that is a lambda value with a clear error at that value.
-- Captures cannot be accessed as public fields: in visit_field, assignment field paths, and J1 field-callable rewrite in visit_member_call, reject field access where base is a lambda: "'{field}' is a capture of '{base}' and is not visible outside its body". Lambda's own captured fields inside call() remain available as ordinary this-field VarNodes.
-- A synthesized closure declaration must still accept a captured lambda; [mut name] capture is permitted and should preserve mutability semantics.
-- Do not accidentally reject direct invocation of a lambda variable (e.g. add_k(5)), which must remain valid.
-
-Verify baseline tests; compare Task 2 reference diagnostics and hand-computed line:col: missing capture 19:11; assign to const capture 19:5; duplicate capture 17:17; unknown capture 8:26; lambda as arg 13:14 (4 spaces, no blank lines per sheet). Also check lambda print/exit/assignment/field-access diagnostics. Report any mismatch, don't alter expected files.
-
-Append J3b ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/semantic_checker.py: added expression_label, check_lambda_argument, check_lambda_initializer, check_lambda_assignment; modified visit_call/visit_member_call for lambda argument diagnostics and visible callee labels; visit_exit/visit_print for value restrictions; visit_decl/check_initializer for explicit generated-closure exemption; visit_assign for closure targets, source values, and capture privacy; visit_field and callable-field rewriting for external capture privacy. Existing non-lambda paths and diagnostics retained.
-- ai_usage.txt: appended this J3b entry.
-What I did: Read AGENTS.md and authoritative Task 2/additional-task diagnostic text from the existing docs/w08-practice.pdf extraction. Rejected ordinary uses of lambda values as arguments, exits, printed values, assignment targets/sources, and user initializers. Added recursive initializer validation while allowing synthesized is_closure declarations to capture lambda values. Blocked external capture reads, writes, and field-call rewrites, including captures reached from another lambda, while retaining implicit this-field VarNode access inside the owning body. Preserved direct/explicit lambda calls, captured lambdas, and mutable copies. Added user-facing callee labels for both callable sugar and explicit .call syntax. Preserved CRLF source line endings. Verification fixtures and hand-derived expectations were written only under /tmp/practice8-j3b.
-Kept from existing code (deliberately untouched): Lexer, parser, AST node classes, compiler CLI, src/code_generator.py, all repository tests/.expected/.ast files, existing non-lambda diagnostics, J3a lambda lowering/scope logic and mutation settling, and J2 source positions. Existing usage entries and student review fields left unchanged. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No LLVM generation/execution for lambdas (J3c); no unrelated refactor or dependency installation. Did not change repository expectations or the temporary expectation file with the supplemental line-count mistake to match observed output.
-Needed elsewhere: J3c must generate LLVM for synthesized lambda structs/methods/declarations. No additional source-file changes needed for J3b.
-Verification:
-Environment: source ~/lcd/bin/activate, using the existing Python 3.12.3 and llvmlite 0.49.0.
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3b-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3b-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3b-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3b-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No baseline regression.
-Targeted exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3b/check.py > /tmp/practice8-j3b/check.log 2>&1
-rc=$?
-tail -n 35 /tmp/practice8-j3b/check.log
-exit "$rc"
-This harness completed 27 exact negative-diagnostic comparisons successfully, plus its positive checks, then exited 1 on a supplemental mutable-capture fixture whose hand-written expectation incorrectly used line 12 instead of line 11. The mismatch is documented below; no compiler defect was found there and its original expectation remains unchanged.
-Five required reference diagnostics all match the PDF/user positions and wording (CLI exit 1, exact compilation error prefix):
-- Missing capture at 19:11: 'k' is not captured by lambda 'add_k': add it to the capture list, [k].
-- Assignment to const capture at 19:5: cannot assign to 'k': the capture 'k' is const, write [mut k].
-- Duplicate capture at 17:17: 'k' is captured twice.
-- Unknown capture at 8:26: cannot capture 'k': no variable 'k' is visible here.
-- Lambda argument at 13:14: 'times' is a lambda and cannot be passed to 'sq': its type has no name, so no parameter can have it.
-Additional exact negative checks passed:
-- Print f at 6:7; exit f at 6:6; assign to const/mut closure f at 6:1; reads f.k at 6:7; writes f.k at 6:1; spaced field call f.  k() at 6:11.
-- User built-in initializer f at 6:7, struct initializer at 10:7, nested struct initializer at 14:10, and lambda assignment source at 7:6 reject the value at its own position with clear unnamed-type messages.
-- Exiting a captured closure or accessing its capture inside another lambda at 8:10 is refused; assigning a mutable captured closure itself at 8:5 is refused.
-- Lambda arguments name g at 10:9 (sugar) / 10:14 (explicit .call), callable object c at 15:9 / 15:14, ordinary method use at 15:13, and callable field h.c at 19:11 / 19:16. No internal call label is exposed for callable invocation.
-- External call through a captured lambda field two.one() is rejected at 9:11, naming capture one of two.
-Positive cases checked semantically: unchanged Task 2 sheet; direct f() and explicit f.call(); captured lambda declarations/invocations; multiple captures combining a lambda with a scalar; additional-task [mut next] captured closure with correct mutable field/closure flags and fixed-point mutation propagation. Own captured fields inside call remain usable. No lambda LLVM attempted.
-Prior J3a semantic regression command: source ~/lcd/bin/activate followed by python3 /tmp/practice8-j3a/check.py > /tmp/practice8-j3b/j3a-check.log 2>&1 (preserved exit status and tailed final four lines). Result: exit 0; all prior capture/scope/lowering checks passed.
-Supplemental expectation mismatch: /tmp/practice8-j3b/const-lambda-capture.expected says 12:11; compiler reports 11:11. Independently recounted source with nl -ba /tmp/practice8-j3b/const-lambda-capture.txt and read the PDF additional-task reference: the first next() call is on line 11, column 11; the PDF also specifies 11:11. The expectation was off by one; original file preserved. This was reported in chat and not hidden by changing the expected file or compiler.
-Independent follow-up exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j3b/positive-check.py
-Result: exit 0. Task 2 sheet, previous closure capture/mutable scalar fixtures, and mutable-closure sheet all pass semantic checking; pending calls clear. Independent source/PDF check confirms the const-captured mutating lambda diagnostic at 11:11 and asserts that the original temporary 12:11 expectation remains untouched.
-Open questions: none. Lambda LLVM generation/execution remains pending J3c.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J3c] LLVM generation for lambdas (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: src/semantic_checker.py
-
-## Open tabs:
-- semantic_checker.py: src/semantic_checker.py
-- ai_usage.txt: ai_usage.txt
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-- lexer.py: src/lexer.py
-
-## My request:
-JOB J3c. Allowed file: src/code_generator.py plus ai_usage.txt. Depends on J3a/J3b. No Git commands.
-
-Spec: Task 2 lambda compilation.
-
-1. In visit_program, use all_structs = node.structs + node.generated_structs for ALL FOUR stages: identified LLVM types, type bodies, member-function declarations, member-function definitions. Create all identified types before setting any type bodies, preserving prior ordering constraints.
-2. Implement visit_lambda(self,node) as node.decl.accept(self). Lambda body is emitted as synthesized lambda.<name>_call member function, NOT inline at declaration.
-3. Use llvmlite.ir exclusively; never write IR as strings.
-
-Verify baseline tests and Task 2 sheet execution via `python3 src/compiler.py <input> <output.ll>` then `lli <output.ll>`; expected printed values 15, 100, 50 and "Program exit with result 11".
-
-Confirm --ast-checked has the sheet's tree (including CallableCall add_k). IR should define `%"lambda.add_k" = type {i32}` and `@"lambda.add_k_call"` whose first arg points to closure; capture initialization must allocate and store via gep; lambda body not emitted in main.
-
-Verify lambda with NO captures and global function call (empty struct) under lli; lambda in while capturing loop variable; lambda capturing another lambda; lambda in member function capturing a field. Derive each expected output manually.
-
-Check behavior and report minimal reproduction if something fails; fix only code_generator.py, never other source files in this job.
-
-Append J3c ai_usage entry and summarize. No Git actions.
-Files changed:
-- src/code_generator.py: visit_program combines node.structs and node.generated_structs for all four struct/member emission stages; added visit_lambda delegating to node.decl.accept(self).
-- ai_usage.txt: appended this J3c entry.
-What I did: Read AGENTS.md, inspected the existing llvmlite generation stages and declaration/member emission, and enabled synthesized lambda types/methods in those stages. All identified types are created before any type bodies; all member declarations precede member definitions. Lambda declarations emit only their synthesized closure declaration, while the lambda body is emitted separately as its member function. Reused existing alloca/GEP/store initialization and member-call generation. Preserved CRLF line endings. Prepared six temporary fixtures and hand-derived output files under /tmp/practice8-j3c before compiling/running them, then checked AST and IR structure.
-Kept from existing code (deliberately untouched): All other code_generator.py methods, parser, lexer, nodes, semantic checker, compiler CLI, repository tests/.expected/.ast files, prior usage entries, and student review fields. IR generation remains exclusively through llvmlite.ir; textual IR was only read for verification. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): No changes to other source files, no textual IR construction, no dependency installation, no new repository tests (outside this job's scope). No extra fixes were needed because every execution matched its prior expectation.
-Needed elsewhere: none for J3c.
-Verification:
-Environment: source ~/lcd/bin/activate (existing Python 3.12.3 and llvmlite 0.49.0); lli 18.1.3.
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3c-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3c-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0.
-Post-source-edit exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j3c-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j3c-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. No existing-test regression.
-Fixtures and expected outputs prepared with python3 /tmp/practice8-j3c/prepare.py before compilation. Execution verification used a Python subprocess loop; exact child commands:
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/sheet.txt /tmp/practice8-j3c/sheet.ll
-lli /tmp/practice8-j3c/sheet.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/empty.txt /tmp/practice8-j3c/empty.ll
-lli /tmp/practice8-j3c/empty.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/loop.txt /tmp/practice8-j3c/loop.ll
-lli /tmp/practice8-j3c/loop.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/capture-lambda.txt /tmp/practice8-j3c/capture-lambda.ll
-lli /tmp/practice8-j3c/capture-lambda.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/member.txt /tmp/practice8-j3c/member.ll
-lli /tmp/practice8-j3c/member.ll
-/home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j3c/mutable.txt /tmp/practice8-j3c/mutable.ll
-lli /tmp/practice8-j3c/mutable.ll
-All twelve child commands exited 0. Each lli stdout was saved as /tmp/practice8-j3c/NAME.actual and asserted byte-for-byte equal to the prewritten NAME.expected text. No stderr failures or output mismatches.
-Hand derivations and observed matching outputs (one output item per line):
-- sheet: add_k captures k=10 before k changes to 100; add_k(5)=15; k prints 100; sum_scaled(2,3,4)=2*(9+16)=50; add_k(1)=11. Output: 15, 100, 50, Program exit with result 11.
-- empty: capture-free f calls global double; double(6)=12 and double(4)=8. Output: 12, Program exit with result 8. Empty closure LLVM type is {} and executes under lli.
-- loop: each iteration captures i before incrementing it; captured 0,1,2 plus 10 print 10,11,12; final i=3. Output: 10, 11, 12, Program exit with result 3. Capture stores therefore execute on each iteration despite entry-block allocation.
-- capture-lambda: f captures k=3; g captures f and returns f(x)+1. Later k=99 does not affect either closure; g(4)=13 and f(2)=6. Output: 13, Program exit with result 6.
-- member: Scale with k=7 declares mul capturing its field within apply; apply(6)=42 and apply(2)=14. Output: 42, Program exit with result 14.
-- mutable (additional-task sheet): next's private counter prints 1 then 2; twice captures a mutable copy at 2, producing 3*10+4=34; original next then prints 3; original n remains 0. Output: 1, 2, 34, 3, Program exit with result 0.
-AST exact commands:
-source ~/lcd/bin/activate
-python3 src/compiler.py --ast-checked /tmp/practice8-j3c/sheet.txt > /tmp/practice8-j3c/sheet.checked.ast
-cmp /tmp/practice8-j3a/sheet.checked.ast /tmp/practice8-j3c/sheet.checked.ast
-Result: exit 0; unchanged sheet checked tree, including Lambda add_k, Struct lambda.add_k, MemberFn call, Decl add_k, and CallableCall add_k.
-IR inspection commands: sed -n '1,100p' /tmp/practice8-j3c/sheet.ll; sed -n '110,180p' /tmp/practice8-j3c/sheet.ll; rg -n 'all_structs|visit_lambda' src/code_generator.py. Follow-up standard-library Python assertions over the emitted files verified: %"lambda.add_k" = type {i32}; lambda.add_k_call first argument %"lambda.add_k"* %"this"; main's add_k alloca; capture getelementptr and a store to its exact result pointer; add_k's arithmetic appears inside its separate function and not in main; main calls that function; empty fixture has %"lambda.f" = type {}. All assertions passed. These checks inspect generated text only; compiler emission uses llvmlite.ir.
-Open questions: none. No failing reproduction to report.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: code
-Changed by the student: None
-Removed/rejected by the student: None
-
-## [J4] Verify mutable captures (2026-10-26)
-Tool/model: Codex (model not exposed)
-Prompt (verbatim): # Context from my IDE setup:
-
-## Active file: ai_usage.txt
-
-## Open tabs:
-- ai_usage.txt: ai_usage.txt
-- code_generator.py: src/code_generator.py
-- semantic_checker.py: src/semantic_checker.py
-- parser.py: src/parser.py
-- nodes.py: src/nodes.py
-
-## My request:
-JOB J4. Allowed source file ONLY IF needed: src/semantic_checker.py; always allow ai_usage.txt. No Git commands.
-
-Spec: additional task in docs/w08-practice.pdf. Verify FIRST, not by editing.
-
-Build the sheet's additional program with 4-space indent and no blank lines:
-
-1 i32 n{0}
-2 fn next := [mut n]() -> i32
-3 {
-4     n := n + 1
-5     exit n
-6 }
-7 print(next())
-8 print(next())
-9 fn twice := [mut next]() -> i32
-10 {
-11     i32 a{next()}
-12     i32 b{next()}
-13     i32 r{a * 10 + b}
-14     exit r
-15 }
-16 print(twice())
-17 print(next())
-18 exit n
-
-Expected: 1, 2, 34, 3, "Program exit with result 0".
-
-Check:
-(a) output;
-(b) changing [mut next] to [next] yields "line 11:11: cannot call 'next': its 'call' changes it, and it is not mut";
-(c) mut capture of a const outer variable works without mutating the original;
-(d) closure is mut iff any capture is mut;
-(e) a captured lambda is const unless [mut next].
-
-If anything fails, identify root cause and the minimal correction. Apply ONLY if correction is confined to semantic_checker.py. If another file is necessary, don't modify it; report under Needed elsewhere.
-
-Run baseline tests after any fix. Report explicitly whether J4 changed any code.
-
-Append J4 ai_usage entry and summarize. No Git actions.
-Files changed: ai_usage.txt — appended this J4 entry. J4 changed NO source code; no functions/classes were added or modified.
-What I did: Read AGENTS.md and the authoritative PDF additional-task text via the existing J1 extraction. Verified first using temporary fixtures under /tmp/practice8-j4, with expected outputs and error position derived before compilation. Built the exact 18-line sheet program with four-space indentation and no blank lines. Tested const outer variable copies, closure mutability flags, and const/mut captured lambdas. No correction was needed. SHA-256 snapshots of every src/*.py file before/after verification confirm source contents unchanged.
-Kept from existing code (deliberately untouched): All source files, including semantic_checker.py; all existing tests/.expected/.ast files; prior usage entries; all student review fields. No Git commands or Git metadata changes.
-Considered but NOT done / rejected (with reason): No semantic checker correction because all five requested checks passed. No changes to code generation or other source files; no dependencies installed; no repository tests added or changed.
-Needed elsewhere: none.
-Verification:
-Environment: source ~/lcd/bin/activate; existing Python 3.12.3 and llvmlite 0.49.0; lli 18.1.3.
-Baseline exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j4-before.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j4-before.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Matches historical baseline.
-Targeted exact shell commands:
-source ~/lcd/bin/activate
-python3 /tmp/practice8-j4/check.py > /tmp/practice8-j4/check.log 2>&1
-rc=$?
-tail -n 10 /tmp/practice8-j4/check.log
-exit "$rc"
-Result: exit status 0; all J4 checks passed. This harness writes all expected files before invoking compiler/lli. For each NAME in sheet, const-outer, const-lambda-legal, flags, it runs /home/lolyter/lcd/bin/python3 src/compiler.py /tmp/practice8-j4/NAME.txt /tmp/practice8-j4/NAME.ll, then lli /tmp/practice8-j4/NAME.ll. All eight processes exit 0; stdout equals each prewritten NAME.expected exactly.
-(a) Sheet: output 1, 2, 34, 3, Program exit with result 0 (one per line). Hand derivation: next's private counter reaches 1 then 2; twice copies that state and produces 3*10+4=34; original next subsequently reaches 3; original const n remains 0.
-(b) Const-capture variant command: /home/lolyter/lcd/bin/python3 src/compiler.py --ast-checked /tmp/practice8-j4/const-capture.txt. Exit 1; stderr exactly: compilation error: line 11:11: cannot call 'next': its 'call' changes it, and it is not mut. Position calculated from the first next() on line 11, four spaces plus i32 a{ before the identifier.
-(c) Const outer x=7 captured as [mut x]: increment returns 8, printing original x gives 7, exiting x gives Program exit with result 7. Confirms mutable capture of const is allowed and modifies only the copied field. The exact sheet already exercises const outer n=0 similarly.
-(d) Closure mutability matrix: empty captures -> const; [x,y] -> const; [mut x,y] -> mut; [x,mut y] -> mut; [mut x,mut y] -> mut. Checked synthesized DeclNode.mutable and capture flags for every case. All generated call methods have nonmutating bodies, confirming closure mutability depends on the capture list, not whether the body mutates. Executing all five prints 0 five times, then Program exit with result 0.
-(e) Captured lambda fields are const with [one]/[next] and mut with [mut next]. A nonmutating captured lambda in a const field executes successfully (prints 1, exits with result 1). The mutating const-captured next is rejected at 11:11, while the mut-captured next in the sheet executes. Verified generated struct field is_mut flags, including the registered lambda.twice field after the expected error.
-Source integrity snapshot: /tmp/practice8-j4/source-hashes.json; harness asserts every src/*.py SHA-256 unchanged after all checks. No failure or root-cause correction needed.
-Post-log verification exact shell commands:
-source ~/lcd/bin/activate
-set -o pipefail
-./test.sh > /tmp/practice8-j4-after.log 2>&1
-rc=$?
-tail -n 8 /tmp/practice8-j4-after.log
-exit "$rc"
-Result: 82 passed, 0 failed; exit status 0. Source contents still match the pre-verification hash snapshot.
-Open questions: none.
---- STUDENT REVIEW (student fills after review) ---
-Kept as-is: ai_usage
-Changed by the student: None
-Removed/rejected by the student: None
-
-
-## J5 — Add Practice 8 tests (2026-10-26)
+## [P9-J1] Harness for --remove-unused: CLI flag, tree walker, test runner, red tests (2026-11-06)
 Tool/model: Codex (model not exposed)
 Prompt (verbatim):
-JOB J5. Allowed: NEW files in tests/ok and tests/err, plus ai_usage.txt. No source changes, existing-test edits, or Git commands.
+JOB P9-J1 — Harness for `--remove-unused`: CLI flag, tree walker, test runner, red tests.
 
-Create each NAME.txt + NAME.expected pair; create NAME.ast for 2-3 positive programs only after manually validating parse AST.
+Context: The current practice is Practice 9 (spec: docs/CS400_Practice_9.pdf). Ignore the Practice 8 task list in AGENTS.md for this job, but every rule in AGENTS.md still applies. Measure the actual baseline first (expected ~123 passed on tests/ok + tests/err).
 
-Derive outputs/line:col BY HAND before running compiler.
+ALLOWED FILES: src/compiler.py, src/optimizer.py (new), test.sh, tests/opt/* (new files only), tests/unit/test_optimizer.py (new), ai_usage.txt.
+Do NOT touch: lexer/parser/semantic_checker/code_generator/nodes, README.md, existing tests. If another file needs a change, report it under "Needed elsewhere".
 
-.expected for successful programs contains stdout plus "Program exit with result N"; for error programs, one exact line "compilation error: line L:C: <message>".
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
 
-Sheet-derived programs have four-space body indents and no blank lines.
+1. src/compiler.py: add the flag `--remove-unused` (store_true). It must work in any position among the paths: use `parser.parse_intermixed_args()` instead of `parse_args()` if compatible with the existing parser (plain argparse breaks on `in.txt --remove-unused out.ll` because output is nargs="?"). If incompatible, STOP and ask before restructuring the CLI. Order of passes: lex -> parse -> checker (exactly once, never re-run) -> if flag: `remove_unused(program)` -> codegen. Apply it in both the `--ast-checked` path and the compile path. `--ast` and `--tokens` stay unchanged (parse tree / tokens). Without the flag the behaviour and every message must be byte-identical to before.
+2. src/optimizer.py (new):
+   - `remove_unused(tree, stats=None) -> tree`. Stub for now: returns the tree unchanged. If `stats` (a dict) is given, it will later receive `stats["rounds"]` (int), `stats["removed_decls"]` (list of names, in removal order) and `stats["removed_functions"]` (list of names). Initialise these keys in the stub (0 / [] / []).
+   - `children(node)` returning the child nodes to visit: Program -> structs + functions + statements + [exit] (NOT generated_structs); Struct -> methods; Function/MemberFn -> [body]; Block -> statements + [exit] if present; Lambda -> [decl, struct] when `struct` is not None (checked tree); Decl -> `init.values` (InitListNode has no accept(); descend into nested InitListNode values); Assign -> [value]; If/While/Exit/BinOp/Not/Print accordingly (Print: skip when `is_string`); Field -> [target] if target is not None; Call -> [sugar] if sugar is not None else args; MemberCall -> [target] + args; Var/Const/Bool/Read/String -> [].
+   - `class Walker` that dispatches on `type(node).__name__`: remove the trailing `Node` suffix (if present), lowercase the remaining name, and call `on_<name>`. Examples: DeclNode -> on_decl, VarNode -> on_var, FieldNode -> on_field, AssignNode -> on_assign. Fall back to visiting `children(node)` when the handler does not exist. Add a small unit test verifying the dispatch.
+3. test.sh: add an env var (e.g. REMOVE_UNUSED=1) that inserts `--remove-unused` into the COMPILER command for the existing tests/ok and tests/err loops; with it unset the script behaves exactly as now. Add a third section for tests/opt: for each NAME.txt, (a) `--remove-unused --ast-checked` output must equal NAME.astc; (b) compile WITHOUT and WITH the flag, run both through lli (stdin from NAME.in if present), both outputs must equal NAME.expected; (c) optional NAME.defs: extract only the defined function names from `grep '^define'` of the flagged .ll and compare them with the file's lines. Section (a)-(c) always pass the flag explicitly, whatever the env var says. Preserve the existing test runner's convention for reporting program exit values. Capture and compare exit codes correctly: a nonzero program exit value is not automatically a test failure. If the existing `.expected` convention for stdout and exit values is unclear, STOP and ask before creating tests. Count these in the summary, but print the tests/ok+err result clearly so it can be compared with the baseline.
+4. TDD red tests (derive by hand, do not copy compiler output):
+   - tests/opt/warmup_chain.txt: `i32 x{10}` / `i32 y{x}` / `i32 z{15}` / `exit z`. Expected tree after the pass: Program / "  Decl z i32 const" / "    Const 15" / "  Exit" / "    Var z" (two-space indents per level, as nodes.py dump() does). Expected result: `Program exit with result 15`, using the existing test runner's output/exit-value convention.
+   - tests/opt/warmup_shadow.txt: `i32 mut r{0}` / `i32 x{1}` / `if true` / `{` / ` i32 x{10}` / ` r := x` / `}` / `exit r`. Expected tree is in the spec ("The tree after the pass"): the outer x is gone, inner x and `r := x` stay. Expected result: `Program exit with result 10`, using the same convention.
+   - tests/unit/test_optimizer.py (stdlib unittest, run from src/ via sys.path): helper `checked(src: str)` doing lex -> Parser -> SemanticChecker().visit_program and returning the tree. Tests: (green) `children()` finds every VarNode of a program that uses a callable-object call, a nested init list and a lambda capture (so the walker does not miss `sugar` or capture inits); (green) Walker dispatch calls `on_decl`, `on_var`, etc. correctly; (red, expected to fail until P9-J2) warm-up 1 gives rounds == 3 and removed_decls == ["y", "x"]; warm-up 2 gives rounds == 2 and removed_decls == ["x"].
 
-Positive tests (19):
+Acceptance: tests/ok + tests/err still all green with and without REMOVE_UNUSED=1 (report the totals); the new warm-up tests and the red unit tests fail for the right reason (nothing removed); the green walker tests pass. State clearly which failures are intentional red tests.
 
-Task 1 (5):
-- callable_both_ways (sheet)
-- callable_field (s.scale(7), scale(side) within a member function)
-- callable_mut_counter (three c() calls then print)
-- callable_in_expr (arithmetic, exit result, global-function arg)
-- callable_i64_param (i32->i64 widening)
-
-Task 2 (9):
-- lambda_sheet
-- lambda_no_capture_global_call
-- lambda_capture_changed_after
-- lambda_in_function_param
-- lambda_in_while
-- lambda_in_if_block
-- lambda_captures_lambda
-- lambda_in_member_fn
-- lambda_struct_capture
-
-Mut (5):
-- mut_counter (sheet)
-- mut_loop
-- mut_two_copies
-- mut_const_and_mut
-- mut_capture_const_var
-
-Negative tests (22):
-
-Task 1 (7):
-- callable_no_call
-- callable_on_i32
-- callable_var_and_fn
-- callable_const_obj
-- callable_const_field
-- callable_wrong_args
-- callable_wrong_type
-
-Task 2 (13):
-- lambda_missing_capture (19:11)
-- lambda_assign_capture (19:5)
-- lambda_dup_capture (17:17)
-- lambda_unknown_capture (8:26)
-- lambda_passed_arg (13:14)
-- lambda_exit_value
-- lambda_print
-- lambda_assign
-- lambda_calls_itself
-- lambda_param_like_capture
-- lambda_capture_field_access (add_k.k)
-- lambda_no_bracket_in_block
-- capture_list_on_member_fn
-
-Mut (2):
-- mut_capture_const_call (11:11)
-- mut_assign_const_capture
-
-Run tests, report totals and any failing case with concise reason.
-
-If compiler result disagrees with independently calculated expected output, DO NOT change expected to match; report minimal reproduction and stop affected tests.
-
-Do not modify existing tests or source code.
-
-Append J5 ai_usage entry and summarize. No Git actions.
-Files changed: Added `NAME.txt` and `NAME.expected` for all 19 positive programs and 22 negative programs under tests/ok and tests/err; added `callable_both_ways.ast`, `lambda_no_capture_global_call.ast`, and `mut_counter.ast`; appended this entry to ai_usage.txt. The four positive inputs callable_in_expr, callable_mut_counter, mut_const_and_mut, and mut_two_copies use local result declarations because exit does not accept arithmetic expressions directly.
-What I did: Added the requested test fixtures. Manually inspected the three selected `--ast` outputs before recording their `.ast` files. Kept every `.expected` value as initially written after finding discrepancies; did not change source files or existing tests.
-Kept from existing code (deliberately untouched): All source files and pre-existing tests.
-Considered but NOT done / rejected (with reason): Did not change expected files to match compiler observations, as instructed. Did not add AST snapshots for more than three positive tests.
-Needed elsewhere: none.
-Verification: Latest recorded pre-J5 baseline from J4: `source ~/lcd/bin/activate; ./test.sh` -> 82 passed, 0 failed, exit 0 (not rerun immediately before adding J5 fixtures). J5 full suite: `set -o pipefail; source ~/lcd/bin/activate; ./test.sh > /tmp/practice8-j5-verified-tests.log 2>&1; rc=$?; tail -n 4 /tmp/practice8-j5-verified-tests.log; rg -n -C 1 '\\[FAIL\\]' /tmp/practice8-j5-verified-tests.log; exit "$rc"` -> 117 passed, 6 failed, exit 1. `callable_in_expr` expected 80 but computes and prints 76 (a(4)=14, a(2)=12, twice(a(1))=22; total 54+22). Five negative expected positions differ from hand-counted source lines and compiler diagnostics: callable_const_field expected 14:8, got 15:8; callable_wrong_args expected 9:6, got 10:6; callable_wrong_type expected 9:8, got 10:8; lambda_exit_value expected 6:6, got 5:6; lambda_print expected 6:7, got 5:7. These expected files remain unchanged. The other 35 J5 fixtures passed.
-Open questions: none.
+Close-out: append one ai_usage.txt entry (ID P9-J1, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- src/compiler.py: import remove_unused, add --remove-unused with parse_intermixed_args(), call the stub after the existing single checker pass in checked-AST and compile paths.
+- src/optimizer.py (new): remove_unused statistics stub, children() checked-tree traversal including nested initializers, Walker.visit() type-name dispatch and fallback.
+- test.sh: REMOVE_UNUSED environment switch, tests/opt AST/runtime/optional-definition checks, independent process-status comparison, separate existing-suite and optimization totals.
+- tests/opt/warmup_chain.txt, warmup_chain.astc, warmup_chain.expected (new): first warm-up and hand-derived optimized tree/result.
+- tests/opt/warmup_shadow.txt, warmup_shadow.astc, warmup_shadow.expected (new): shadowing warm-up and spec-derived optimized tree/hand-derived result.
+- tests/unit/test_optimizer.py (new): checked() helper, two green traversal/dispatch tests, two intentionally red fixed-point/removal-order tests.
+- ai_usage.txt: repository-instructions header and this P9-J1 entry.
+What I did: Verified docs/CS400_Practice_9.pdf exists and read its relevant specification. Measured the baseline before source edits. The default Python lacked llvmlite (0 passed, 123 failed); found the existing ~/lcd environment and obtained 123 passed, 0 failed before changes. Used that environment for subsequent compiler verification, as the student directed. Implemented only the requested harness and identity stub. Derived both .astc and .expected fixtures before comparing compiler output. Kept optimization runtime checks running even when AST comparisons fail. Verified the pass order, flag positions, unchanged raw modes and unflagged output, stdin handling, optional definitions, and matching/mismatching nonzero process statuses.
+Kept from existing code (deliberately untouched): lexer, parser, semantic_checker, code_generator, nodes, README.md, all pre-existing tests and expected snapshots; existing compiler diagnostics and language exit-value reporting; original tests/ok and tests/err loop logic apart from the compiler environment switch. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No actual declaration/function removal or effect analysis (later jobs); no regeneration of fixtures from compiler output; no dependency installation (existing environment available); no new abstractions or unrelated refactoring. The initial green test program used an expression directly after exit, which the grammar disallows; corrected the new program to declare result{seed + v} and exit result, deriving its VarNode expectation by hand before rerunning. No existing source tests or expected results were changed.
+Needed elsewhere: none
+Verification:
+- Initial baseline, before changes (default Python):
+  set -o pipefail; ./test.sh > /tmp/practice9-baseline.log 2>&1; rc=$?; tail -n 8 /tmp/practice9-baseline.log; exit "$rc"
+  Result: status 1; 0 passed, 123 failed, caused by ModuleNotFoundError: No module named 'llvmlite'.
+- Existing-environment baseline, before changes:
+  PATH=/home/lolyter/lcd/bin:$PATH bash -c 'set -o pipefail; ./test.sh > /tmp/practice9-baseline-venv.log 2>&1; rc=$?; tail -n 8 /tmp/practice9-baseline-venv.log; exit "$rc"'
+  Result: status 0; 123 passed, 0 failed.
+- Final default runner:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-tests-default.log 2>&1
+  rc=$?
+  tail -n 32 /tmp/practice9-tests-default.log
+  exit "$rc"
+  Result: status 1 (intentional red tests); existing tests/ok + tests/err: 123 passed, 0 failed; optimization checks: 2 passed, 2 failed; total: 125 passed, 2 failed. Both runtime comparisons pass; only warmup_chain and warmup_shadow optimized AST comparisons fail because the stub retains unused declarations.
+- Final flagged runner:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-tests-flag.log 2>&1
+  rc=$?
+  tail -n 8 /tmp/practice9-tests-flag.log
+  exit "$rc"
+  Result: status 1 (same intentional red tests); existing tests/ok + tests/err: 123 passed, 0 failed; optimization checks: 2 passed, 2 failed; total: 125 passed, 2 failed. Error messages continue to match all existing error fixtures.
+- Unit tests from repository root:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-unit.log 2>&1
+  rc=$?
+  cat /tmp/practice9-unit.log
+  exit "$rc"
+  Result: 4 tests, 2 passed, 2 intentional failures, no errors. Green: children traversal and Walker dispatch. Red: actual (rounds, removed_decls) = (0, []) versus (3, ['y', 'x']) and (2, ['x']).
+- Unit tests from src/:
+  source ~/lcd/bin/activate
+  cd src
+  python3 ../tests/unit/test_optimizer.py -v > /tmp/practice9-unit-from-src.log 2>&1
+  rc=$?
+  tail -n 37 /tmp/practice9-unit-from-src.log
+  exit "$rc"
+  Result: same 2 green tests and 2 intentional red tests, no errors.
+- source ~/lcd/bin/activate; python3 /tmp/practice9-pass-order.py
+  Result: passed; instrumented runpy checks show exactly one checker call before one optimizer call in compile and checked-AST modes; tokens and raw AST invoke neither.
+- bash -n test.sh
+  Result: status 0.
+- Additional inline Python subprocess assertions in the activated environment: passed. Compared the saved pre-edit compiler against the current compiler for tokens, AST, checked AST, compilation stdout/stderr/status and emitted IR, and the missing-output diagnostic. Checked --remove-unused before, between and after paths. Exercised the optimization section in a temporary directory using hand-written input/AST/output/.defs fixtures and real generated IR/lli, overriding only the process statuses: stdin and .defs checks pass with matching status 7 (3 passed, 0 failed); differing statuses 7/8 fail only execution (2 passed, 1 failed); putting external declaration printf in .defs fails only the definitions check (2 passed, 1 failed). Temporary validation files stayed under /tmp.
+Open questions: none
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: Ok and err tests
-Changed by the student: Added .ast files, and some expected
-Removed/rejected by the student: None
+Kept as-is: optimizer.py, compile.py
+Changed by the student: name of the tests (warmup -> unused_var) to fit what it is testing
+Removed/rejected by the student: nothing for now - plan to remove test_optimizer.py and leave only behavior check
 
-## [J6] Document lambda grammar and checked AST (2026-10-26)
+## [P9-J2] Task 1: remove unused variables (counting visitor + pruner + loop) (2026-11-06)
 Tool/model: Codex (model not exposed)
 Prompt (verbatim):
-JOB J6. Allowed files: grammar.ebnf, README.md, ai_usage.txt. No Git commands, no source-code edits.
+JOB P9-J2 — Task 1: remove unused variables (counting visitor + pruner + loop).
 
-1. grammar.ebnf: add
-     lambda  ::= "fn" ident ":=" "[" [ capture { "," capture } ] "]"
-                 "(" [ type ident { "," type ident } ] ")" "->" type NL block
-     capture ::= [ "mut" ] ident
-   and extend statement to decl | assign | if | while | print | lambda, preserving style.
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("TASK 1"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (tests/ok + tests/err, with and without REMOVE_UNUSED=1).
 
-2. README.md: add "### Print the AST after the semantic pass" with `python3 src/compiler.py --ast-checked input.txt`, matching the existing documentation style.
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, ai_usage.txt.
+Do NOT touch: any other src file, test.sh, README.md, existing tests. If the checker or nodes need a change (e.g. a missing `decl` link), STOP and report under "Needed elsewhere" instead of editing.
 
-3. Audit ai_usage.txt: require entries for J0, J1, J2, J3a, J3b, J3c, J4, J5. List missing entries without inventing them. Review fields marked PENDING REVIEW are legitimate until the student has reviewed; list outstanding ones, DO NOT fill them. The J6 entry itself will also remain pending until student review.
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
 
-4. Add a short summary at the top of ai_usage.txt: tools/models truly known, jobs completed, facts about student accepted/changed/rejected ONLY if provided by student, final actual ./test.sh totals. If review data is missing say "student review pending"; do not invent counts.
+Use `rg -n` to check these facts in src/semantic_checker.py and src/nodes.py before coding:
+- `.decl` is set on VarNode, FieldNode (local base) and AssignNode; it is None for fields of `this` and lambda captures (`is_this_field`). Parameters use throwaway DeclNodes that are never in a block. Guard every `.decl` use with `is not None`.
+- DeclNode initialisers are `node.init.values` (InitListNode, possibly nested), not `inits`.
+- A callable call `c(5)` is a CallNode with `.sugar` = MemberCallNode whose target is a VarNode/FieldNode with `.decl`. The counter MUST descend into `sugar`; otherwise `c` loses its read.
+- A LambdaNode has `.decl` (closure DeclNode, `is_closure=True`) and `.struct`; the lambda body is the same BlockNode that is inside `program.generated_structs`. The captures' VarNodes inside `decl.init` are real reads of the captured variables. Avoid double-counting reads if the same shared AST subtree is reachable through more than one traversal path.
 
-5. In chat (not in a new file), propose PR description for practice-8 -> main, reviewer vovaskochko, describing implemented functionality, demo commands from the spec, and ai_usage.txt. Treat it as draft only; do not use Git or create a PR.
+Implement with the Walker/children helpers from P9-J1:
+1. UseCounter(Walker): `reads` dict keyed by id(DeclNode). on_decl: setdefault 0; if any init value contains a CallNode/MemberCallNode/ReadNode, count a read of the decl itself (kept). on_var / on_field: count a read of `.decl` (guarded), and for FieldNode also visit `target` when not None. on_assign: do NOT count the target; visit only the value; if the value contains a call/read, count a read of `node.decl` (guarded). Everything else: visit children. Write the call/read test as one function `has_call_or_read(expr)` (it will be replaced in a later job).
+2. Dead set = tree DeclNodes (found during the walk) with 0 reads, excluding closure decls (`is_closure`), excluding parameters.
+3. Pruner: rebuild `statements` lists IN PLACE (`block.statements = [...]`) for the Program, function bodies, member-function bodies, if/else blocks, while bodies and lambda bodies (the shared BlockNode). Drop a dead DeclNode and every AssignNode whose `decl` is dead. Never delete from a list while iterating it. Do not touch `exit`, params, fields, lambdas or if/while nodes (an if whose block becomes empty stays).
+4. `remove_unused`: loop until a round removes nothing; fill `stats` (rounds counts all executed rounds including the final one that removes nothing; removed_decls in removal order). Task 2 (functions) is NOT part of this job.
 
-Append J6 ai_usage entry and summarize. No Git actions.
-Files changed: grammar.ebnf — added lambda/capture productions and included lambda in statement; README.md — documented `--ast-checked`; ai_usage.txt — added the top summary and this J6 record.
-What I did: Documented Task 2 lambda syntax using the existing grammar style and added the checked-AST command beside the parse-AST instructions. Audited the required job headings: J0, J1, J2, J3a, J3b, J3c, J4, and J5 are present; none are missing. Left those and all prior review text unchanged. The top summary reports only tools/model data present in the log, notes the recorded job set, and gives the current suite result. J6 review fields are filled in below.
-Kept from existing code (deliberately untouched): All source files, tests and prior job records/review fields. No Git commands or metadata changes.
-Considered but NOT done / rejected (with reason): Did not invent missing job entries or review decisions. Did not create a PR or run Git commands; the requested PR description is provided in chat as a draft.
-Needed elsewhere: none.
-Verification: Read the current grammar.ebnf, README.md, and ai_usage.txt; audited headings and PENDING REVIEW markers with `rg`. Suite command: `set -o pipefail; source ~/lcd/bin/activate; ./test.sh > /tmp/practice8-j6-tests.log 2>&1; rc=$?; tail -n 12 /tmp/practice8-j6-tests.log; exit "$rc"`. Result: 123 passed, 0 failed; exit status 0.
-Open questions: none.
+TDD: first add/extend failing unit tests in tests/unit/test_optimizer.py, then implement. Tests to have (derive expectations by hand): warm-up 1 (rounds 3, removed ["y","x"]); warm-up 2 (rounds 2, removed ["x"], inner x and `r := x` survive); `y := 5` on an unread y (decl and assignment both removed, codegen-ready tree); `p.x := 5` on an unread struct variable p; an unread parameter stays; `k := k + 1` with nobody else reading k survives; a capture in a reachable lambda keeps its variable; `c(5)` keeps c when the callable object is actually used; a decl whose value calls a function stays; `read()` initialiser stays; an if block whose only content is removed stays as an empty block; shadowed names counted per declaration. Also run the full compiler end-to-end on warm-up 1 and 2 with the flag and check the tests/opt warm-up tests from P9-J1 are now green.
+
+Acceptance: unit tests green; tests/opt warm-up tests green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals). Do not edit expectations to match a bug; on a discrepancy, report it.
+
+Close-out: append one ai_usage.txt entry (ID P9-J2, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- src/optimizer.py: implemented remove_unused() fixed-point loop and statistics; added has_call_or_read(), UseCounter and Pruner; added ReadNode import. Existing Walker and children helpers retained.
+- tests/unit/test_optimizer.py: extended both warm-ups with tree/link assertions; added 14 tests for dead declarations/assignments, codegen readiness, parameters/functions, self-reads, captures, callable sugar, calls/read effects, nested initializers, fields/call targets, empty branches/loops, member/lambda bodies and shared-node counting; added CodeGen/LLVM verification imports.
+- ai_usage.txt: appended this P9-J2 entry; earlier entries and student-review fields untouched.
+What I did: Measured both baseline modes before edits in the existing ~/lcd environment. Verified docs/CS400_Practice_9.pdf exists and consulted TASK 1. Used rg -n and targeted reads to confirm local declaration links, None links for this/captured fields, synthetic parameter declarations outside statement lists, node.init.values, callable sugar targets, closure declaration initializers and shared lambda/generated-method bodies. Added tests first: 18 tests ran with 8 expected failures and no errors against the stub. Then implemented declaration-identity read counting, conservative call/read retention, unique-node visitation, pruning of zero-read tree declarations and their assignments, and iteration through the final no-change round. Only statement-list attributes are rebuilt, retaining block identity and all exits/parameters/fields/lambdas/if/while nodes. Verified all unit tests, both full-suite modes and exact runtime stdout/stderr/status parity for all 57 executable test programs.
+Kept from existing code (deliberately untouched): compiler CLI and checker invocation, lexer, parser, semantic_checker, nodes, code_generator, test.sh, README.md, every existing source/expected/AST fixture, the existing children()/Walker traversal contract, and prior ai_usage.txt review records. Existing optimization fixtures are now named unused_var_chain and unused_var_shadow; used those files without changing them. Parameters are excluded by collecting only DeclNodes reached as tree children, not by following .decl back-links. Closure declarations are explicitly excluded from the dead set; functions are never removed.
+Considered but NOT done / rejected (with reason): No Task 2 function removal or optional effect analysis (outside this job). Calls and read() remain conservative effects through one has_call_or_read() function. No checker/node changes (required links already exist), no fixture rewrites, no dependency installation, no unrelated refactoring. No Git commands or Git metadata changes.
+Needed elsewhere: none
+Verification:
+- Both baselines, before source/test edits (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j2-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j2-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-baseline-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: existing tests/ok + tests/err: 123 passed, 0 failed in each mode; optimization checks: 2 passed, 2 failed; total 125 passed, 2 failed in each mode. Both runner statuses 1 solely for the pre-existing P9-J1 red optimized-AST comparisons.
+- TDD red phase, after adding tests and before implementing the optimizer:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j2-unit-red.log 2>&1
+  rc=$?
+  rg '^test_|^Ran |^FAILED|^OK|^ERROR:' /tmp/practice9-j2-unit-red.log
+  exit "$rc"
+  Result: status 1; 18 tests, 10 passed, 8 failed, no errors. Failures: both warm-ups, missing UseCounter, dead scalar/field assignments, pruning empty branches/loop, function-local removal and shared lambda/member body removal. Expected outputs/tree identities were derived by hand before execution.
+- Final unit tests from repository root:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j2-unit.log 2>&1
+  rc=$?
+  tail -n 24 /tmp/practice9-j2-unit.log
+  exit "$rc"
+  Result: status 0; 18 passed, 0 failed. Dead-assignment tests generate IR through the existing llvmlite.ir CodeGen and verify the result with binding.parse_assembly(...).verify(). Warm-up rounds/removal order: 3 / ['y', 'x'] and 2 / ['x']; inner shadowed declaration and assignment remain.
+- Final unit tests from src/:
+  source ~/lcd/bin/activate
+  cd src
+  python3 ../tests/unit/test_optimizer.py -v > /tmp/practice9-j2-unit-from-src.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j2-unit-from-src.log
+  exit "$rc"
+  Result: status 0; 18 passed, 0 failed.
+- Both full suites after implementation (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j2-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j2-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: status 0; in BOTH modes existing tests/ok + tests/err: 123 passed, 0 failed; optimization checks: 4 passed, 0 failed; total 127 passed, 0 failed. Both warm-up checked ASTs match the existing snapshots and both execution comparisons pass. Existing error diagnostics match their fixtures in both modes.
+- Additional end-to-end runtime comparison (script under /tmp, no repository fixture changes):
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j2-runtime-check.py
+  Result: status 0; 57 programs (tests/ok and tests/opt) each compiled without/with --remove-unused and executed through lli with their .in files when present. Both stdout results match the existing .expected convention; exact stdout bytes, stderr bytes and process return codes match between modes. unused_var_chain.txt prints 'Program exit with result 15', process status 0; unused_var_shadow.txt prints 'Program exit with result 10', process status 0.
+Open questions: none
 --- STUDENT REVIEW (student fills after review) ---
-Kept as-is: grammar.ebnf, README.md
+Kept as-is: optimizer.py, test_....py (Checked ast tree after optimization in console)
+Changed by the student: nothing
+Removed/rejected by the student: nothing for now
+
+## [P9-J3] Task 2: remove unused global functions (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J3 — Task 2: remove unused global functions (reuses the Task 1 loop).
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("TASK 2"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (tests/ok + tests/err with and without REMOVE_UNUSED=1, plus tests/opt and unit tests).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, tests/opt/unused_fn_chain.txt/.astc/.expected/.defs (new), ai_usage.txt.
+Do NOT touch anything else; report other needs under "Needed elsewhere".
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+Facts to verify with `rg -n` before coding: a global call is a CallNode with `sugar is None`, `is_this_call` False and `fn_decl` a FnInfo (name = node.func_name); a this-call has `is_this_call` True (member function, NOT a global call); callable-object calls go through `sugar` (a MemberCallNode, not a global call). Codegen (src/code_generator.py visit_program) emits every struct of `node.structs + node.generated_structs` and every function of `node.functions`.
+
+Implement:
+1. Extend the counter with `calls[name]`: initialise 0 for every function in `program.functions`; count each global CallNode wherever it stands (statements, function bodies, member functions, lambda bodies, even inside functions that are removed in this same round). Self-calls count, so recursive and mutually recursive unused functions stay (document this as a known limit in a comment).
+2. Pruner: remove functions with 0 calls from `program.functions` (rebuild the list). Member functions and lambdas are never removed. Do it in the same round as declarations (one counter run per round), fill `stats["removed_functions"]` in order.
+3. IMPORTANT codegen trap: lambda structs live in `program.generated_structs`, and codegen emits all of them. After each prune, rebuild `generated_structs` keeping only the structs of LambdaNodes that are still reachable in the tree (walk the tree, collect `LambdaNode.struct`, filter the existing list by identity, keep the original order, include nested lambdas). Avoid retaining generated structs reachable only through removed subtrees. Otherwise a lambda inside a removed function would still be emitted and look up a removed function in `llvm_functions` (KeyError).
+4. The loop stops when a round removes nothing (neither declarations nor functions).
+
+TDD: write failing tests first, then implement. Unit tests (hand-derived): the three-function chain from the spec (twice / helper / unused, exit twice(2)): iteration 1 removes unused; iteration 2 removes helper; iteration 3 finds twice still called and stops. Assert removed_functions == ["unused","helper"], rounds == 3. Also test: two functions calling only each other stay; a self-recursive unused function stays; a function called only from a member function stays; a function called only from a lambda body stays; a lambda declared inside an unused function that calls another global function: both the function and (after iterating) the callee are removed AND the full compile with the flag still succeeds and runs. Add tests/opt/fn_chain.* : .txt = the spec's three-function program; .expected = `Program exit with result 4` using the existing test runner's output/exit-value convention; .astc = tree with only `twice` (Function twice -> i32 / Param a i32 / Block / Decl r i32 const / BinOp + / Var a / Var a / Exit / Var r) followed by the top-level Exit with a `Call twice` node (derive it exactly from the dump() methods in src/nodes.py); .defs = the two defined names that appear in the flagged .ll (`_user_twice` and `main`; check the exact names emitted in `grep '^define'` output and store names only, not whole define lines).
+
+Acceptance: all unit tests green; tests/opt (warm-ups + fn_chain) green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals). Report, do not paper over, any mismatch between your hand-derived expectation and the compiler.
+
+Close-out: append one ai_usage.txt entry (ID P9-J3, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- src/optimizer.py: UseCounter.__init__(), on_program() and on_call() count global calls; Pruner.__init__(), on_program() and on_lambda() remove zero-call functions and collect reachable lambda-struct identities; remove_unused() handles both dead sets, function statistics and the joint stopping condition. Added the known recursive-cycle limitation as a comment.
+- tests/unit/test_optimizer.py: added seven Task 2 tests (function chain, mutual recursion, self recursion, calls from member/lambda bodies, exclusion of this/callable calls, and dead/reachable nested-lambda structs with a full compiler/lli check). Renamed the parameter-preservation test and made its function reachable, since removing uncalled global functions is now required. Added subprocess/tempfile imports for the end-to-end test.
+- tests/opt/unused_fn_chain.txt (new): the spec's twice/helper/unused program, with the braces required by the existing grammar.
+- tests/opt/unused_fn_chain.astc (new): hand-derived checked tree containing only twice and the top-level call.
+- tests/opt/unused_fn_chain.expected (new): hand-derived 'Program exit with result 4'.
+- tests/opt/unused_fn_chain.defs (new): defined names only, main then _user_twice in codegen emission order.
+- ai_usage.txt: appended this P9-J3 entry; previous entries and student-review fields untouched.
+What I did: Verified the authoritative PDF exists and consulted TASK 2. Measured default/flagged runner and unit baselines before edits. Used rg -n and targeted reads to verify FnInfo global-call metadata, is_this_call member-call metadata, callable sugar, and codegen's emission of original/generated structs and all remaining global functions. Derived new fixture contents from the spec, dump() methods and codegen construction order before comparing with compiler output. Added tests first (25 tests, 3 failures, no errors), then extended the existing single counter/pruner loop. Each round counts calls even in functions removed in that round, removes zero-call global functions in source order, and filters generated_structs by the identities of lambdas found while pruning the surviving tree. The same traversal includes reachable nested lambdas and excludes lambdas inside removed functions. The function chain removes unused and then helper over two changing rounds, followed by the third no-change round. The full nested-lambda test removes unused and its leaf callee, retains the two reachable generated structs in order, and compiles/runs with --remove-unused successfully.
+Kept from existing code (deliberately untouched): compiler CLI, lexer, parser, checker, nodes, code_generator, test.sh, README.md, all pre-existing tests/opt/ok/err sources and fixtures, and Task 1's declaration/effect rules and Walker/children helpers. Member functions and surviving LambdaNodes remain. Existing student-review records remain unchanged.
+Considered but NOT done / rejected (with reason): No graph reachability analysis to remove recursive function cycles (the required counting approach intentionally retains self/mutual recursion; documented in code). No optional effect analysis, Task 3 note or unrelated changes. No additional collector class or traversal was needed: Pruner collects surviving lambda identities during its existing walk. Used unused_fn_chain.* from ALLOWED FILES instead of the shorter fn_chain.* shorthand later in the prompt. The earlier parameter test's uncalled-function assumption belonged to Task 1; making that function called preserves the parameter assertion under Task 2 without changing an expectation to hide a bug. No fixture expectation mismatches occurred. No dependency installation or Git commands/metadata changes.
+Needed elsewhere: none
+Verification:
+- Baseline before edits (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j3-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j3-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-baseline-flag.log
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j3-baseline-unit.log 2>&1
+  unit_rc=$?
+  tail -n 5 /tmp/practice9-j3-baseline-unit.log
+  printf 'Baseline statuses: default=%s flagged=%s unit=%s\n' "$plain_rc" "$flag_rc" "$unit_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ] || [ "$unit_rc" -ne 0 ]; then exit 1; fi
+  Result: all statuses 0. Each runner mode: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 4 passed, 0 failed; total 127 passed, 0 failed. Unit tests: 18 passed, 0 failed.
+- TDD red phase, tests added before optimizer implementation:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j3-unit-red.log 2>&1
+  rc=$?
+  rg '^test_|^Ran |^FAILED|^OK|^ERROR:' /tmp/practice9-j3-unit-red.log
+  exit "$rc"
+  Result: status 1; 25 tests, 22 passed, 3 failed, no errors. Failures were the chain retaining uncalled functions, missing call-count state, and the dead-function/nested-lambda removal case.
+- Final units from repository root:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j3-unit.log 2>&1
+  rc=$?
+  tail -n 31 /tmp/practice9-j3-unit.log
+  exit "$rc"
+  Result: status 0; 25 passed, 0 failed. Includes removed_functions == ['unused', 'helper'], rounds == 3; intentional retention of unused recursive cycles; member/lambda-only global callees; exclusion of this/callable calls; and nested-lambda cleanup with successful flagged compile/lli execution printing 'Program exit with result 3', status 0.
+- Final units from src/:
+  source ~/lcd/bin/activate
+  cd src
+  python3 ../tests/unit/test_optimizer.py -v > /tmp/practice9-j3-unit-from-src.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j3-unit-from-src.log
+  exit "$rc"
+  Result: status 0; 25 passed, 0 failed.
+- Final full runners (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j3-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j3-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0. BOTH modes: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 7 passed, 0 failed; total 130 passed, 0 failed. Both warm-up ASTs and runtime comparisons remain green; the new function-chain AST, runtime pair and defined-name comparison are green. All existing error messages match their fixtures.
+- Explicit flagged chain compile, define inspection and execution:
+  source ~/lcd/bin/activate
+  python3 src/compiler.py tests/opt/unused_fn_chain.txt --remove-unused /tmp/practice9-j3-fn-chain.ll
+  rc=$?
+  if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+  grep '^define' /tmp/practice9-j3-fn-chain.ll
+  lli /tmp/practice9-j3-fn-chain.ll
+  Result: status 0; definitions appear as define i32 @"main"() then define i32 @"_user_twice"(i32 %".1"); output is 'Program exit with result 4'. The names-only fixture was derived before this observation and matched.
+- Exact runtime parity check (temporary script reuses the previous stage's generic checker with a J3 temporary-directory prefix):
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j3-runtime-check.py
+  Result: status 0; all 58 tests/ok + tests/opt programs compiled without/with --remove-unused, ran through lli with their input fixtures, matched existing expected stdout, and produced identical stdout bytes, stderr bytes and process exit statuses. The function chain prints result 4 and both variable warm-ups print results 15 and 10, all with process status 0.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: optimazer.py and tests for optimazer (in tests/)
+Changed by the student: nothing
+Removed/rejected by the student: noting (later - delete defs file, check using files)
+
+## [P9-J4] Task 3: complete tests/opt, verify both-ways runs, write the README note (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+
+JOB P9-J4 — Task 3: complete tests/opt, verify both-ways runs, write the README note.
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("TASK 3"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first.
+
+ALLOWED FILES: tests/opt/* (new files only), tests/unit/weakref_check.py (new), test.sh (only if a bug in the tests/opt section from P9-J1 must be fixed), README.md (only the new "Optimizations" section and the usage list), ai_usage.txt.
+Do NOT edit src/*. If a new test exposes a bug in src/optimizer.py or elsewhere, DO NOT fix it: record the test as failing, and report it under "Needed elsewhere" with the minimal reproducer.
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+1. Add tests/opt programs. Every one: NAME.txt, NAME.astc (the tree printed by `--remove-unused --ast-checked`) and NAME.expected (identical observable output with and without the flag, following the existing test runner's stdout/exit-value convention). Derive .astc and .expected BY HAND from the program, the spec, and the dump() methods in src/nodes.py; only then compare with the compiler. Existing tests: warmup_chain, warmup_shadow, fn_chain (keep unchanged). Design new tests so that their expected optimized AST also remains valid after the additional calls-without-effects task in J5, unless the specification requires otherwise. If this conflicts with a required test case, STOP and ask. New:
+   decl_in_if (a dead declaration inside an if block; make the block become empty and still compile and run); kept_call_prints (a declaration kept because its value calls a function that PRINTS — the callee must print, so the result does not change when the "calls without effects" extension lands); nothing_removed (no pure calls in unused declarations, for the same reason); read_kept (a dead decl initialised by read() stays; add NAME.in); self_feeding (`k := k + 1` with nobody else reading k survives); unused_assign (`y := 5` on an unread y and `p.x := 5` on an unread struct p: declarations and assignments gone); capture_keeps_var (a reachable lambda captures a variable nobody else reads: the variable stays; ensure the lambda is actually used); callable_keeps_obj (`c(5)` keeps c; ensure the call is observable or its result is used so this stays valid after J5); param_unused (an unused parameter stays); lambda_in_unused_fn (a lambda inside an unused global function calling another global function: both functions are removed, program still compiles and runs).
+2. Run: `./test.sh` and `REMOVE_UNUSED=1 ./test.sh`. Everything in tests/ok, tests/err and tests/opt must be green both ways (every earlier program prints the same, every error text is the same, and exit values are preserved). Report both totals.
+3. tests/unit/weakref_check.py: a script (runs from the repo root, uses src/ on sys.path) that for the same tiny program measures what happens to a removed node: before the pass take `weakref.ref` of (a) a dead declaration inside an if block and (b) a dead top-level declaration; drop every strong reference you hold; run `remove_unused`; print whether each weakref is None immediately, and after `gc.collect()`. Run it once with the SemanticChecker object still alive and once after `del`-ing it (SemanticChecker.scopes[0] keeps top-level decls alive while the checker lives — verify this by measurement, do not assume it). Print its output in the report verbatim.
+4. README.md: add `--remove-unused` to the usage list (flag may appear anywhere), and a section "Optimizations" with: what the pass removes (unused variables, per declaration, iterated; unused global functions, iterated); the limits next to each other — a variable that only feeds itself (`k := k + 1`) survives, and two functions that call only each other (or a self-recursive one) survive; and the note "who frees a removed subtree" in a few lines: implementation language (Python/CPython), what its memory model does with an unreferenced node (reference counting + cyclic collector), whether nodes keep a pointer to their parent (check `src/nodes.py`; none expected) and what that would do to a reference count, and ONE measurement taken from weakref_check.py (copy the real printed result, do not invent it). Write it in plain, short sentences; the student will review and rewrite it.
+
+Acceptance: >= 6 programs in tests/opt (aim for all listed), tests/ok + tests/err + tests/opt green with and without REMOVE_UNUSED=1, weakref output reported, README section present. If any new test is red because of a compiler bug, report it and stop.
+
+Close-out: append one ai_usage.txt entry (ID P9-J4, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- tests/opt/decl_in_if.txt/.astc/.expected (new): dead branch-local declaration disappears; the empty if block stays and the program exits with printed result 7.
+- tests/opt/kept_call_prints.txt/.astc/.expected (new): an unread declaration calls loud(), which prints 9 and returns 4; the declaration and effectful call stay, followed by printed program result 0.
+- tests/opt/nothing_removed.txt/.astc/.expected (new): both variables are read; output 5 followed by printed program result 2; no calls in unread declarations.
+- tests/opt/read_kept.txt/.astc/.expected/.in (new): unread read() initializer remains; input 23, printed program result 0.
+- tests/opt/self_feeding.txt/.astc/.expected (new): k := k + 1 retains k and its assignment; printed program result 0.
+- tests/opt/unused_assign.txt/.astc/.expected (new): unread scalar/struct declarations and y := 5 / p.x := 5 disappear; Point's field stays; printed program result 0.
+- tests/opt/capture_keeps_var.txt/.astc/.expected (new): a reachable, called lambda captures k; k stays and the lambda's result is the program's printed result 7.
+- tests/opt/callable_keeps_obj.txt/.astc/.expected (new): exit c(5) uses a Scale callable initialized with factor 3; the object stays and the printed program result is 15.
+- tests/opt/param_unused.txt/.astc/.expected (new): first(7, 99) retains both used and unused parameters; printed program result 7.
+- tests/opt/lambda_in_unused_fn.txt/.astc/.expected (new): an unused function containing a lambda calling leaf() and the global leaf() are both removed; printed program result 0.
+- tests/unit/weakref_check.py (new): SOURCE constant, measure(keep_checker) and main entry point; creates only weak references to the two measured nodes, optionally deletes the checker before optimization, then reports immediate and post-gc.collect() liveness for the same tiny program.
+- README.md: added the --remove-unused usage entry and flag-position note; appended only the Optimizations section with removal behavior, adjacent self-feeding/recursive-cycle limits, CPython ownership explanation, absent parent links, checker scope retention and one verbatim measured result.
+- ai_usage.txt: appended this P9-J4 entry, preserving earlier entries and student-review fields.
+What I did: Read the attached job text and repository instructions, verified docs/CS400_Practice_9.pdf exists and consulted TASK 3 and the additional-task effect rules. Measured both runner baselines before changes. Inspected dump() methods, checked-lambda construction/naming, optimizer traversal and checker scope lifetime. Derived all ten new .astc/.expected files by hand before comparing with the compiler. The callee in kept_call_prints really prints; callable/lambda/function results are used; nothing_removed has no unread pure-call declaration. Thus the new snapshots remain valid for the specified J5 extension. Added all ten requested cases, bringing tests/opt to 13 programs. Ran the new cases through checked-AST comparison, both compile modes and lli, with exact stdout/stderr/process-status comparison; no expectation mismatches or source bugs appeared. Measured weakref behavior in CPython, then copied one actual printed line into the README. Ran both full suites and the existing unit suite. Used SHA-256 checksums to verify source files, all pre-existing optimization fixtures, test.sh and the existing unit test file remained unchanged; checked README edits are limited to the new usage entry and Optimizations section.
+Kept from existing code (deliberately untouched): all src files, test.sh (no optimization-runner bug found), tests/unit/test_optimizer.py, all pre-existing tests/ok and tests/err fixtures and all three pre-existing optimization programs/fixtures (currently named unused_var_chain, unused_var_shadow and unused_fn_chain), and all earlier student-review records. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No compiler/optimizer fixes, because none were exposed and src edits are prohibited for this job. No J5 implementation or effect analysis. No rewrites of old expectations or renaming of old fixtures. No test.sh edits, dependency installation or unrelated documentation changes. Avoided unused pure-call declarations in the new fixtures except the required genuinely effectful print/read cases, so future J5 behavior does not invalidate them.
+Needed elsewhere: none
+Verification:
+- Both baselines before edits (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j4-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j4-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-baseline-flag.log
+  printf 'Baseline statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0. Each mode: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 7 passed, 0 failed; total 130 passed, 0 failed.
+- New-case validation, after writing hand-derived fixtures and before adding the README section:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j4-new-tests.py > /tmp/practice9-j4-new-tests.log 2>&1
+  rc=$?
+  cat /tmp/practice9-j4-new-tests.log
+  exit "$rc"
+  Result: status 0; all 10 new optimization programs pass byte-for-byte checked-AST comparison, both compile/run output checks, empty runtime stderr checks and exact runtime stdout/stderr/status parity. read_kept uses its .in file. No expected files were changed after observing the compiler.
+- Existing unit suite:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j4-unit.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j4-unit.log
+  exit "$rc"
+  Result: status 0; 25 passed, 0 failed. weakref_check.py is a separate measurement script, not a discovered unit test.
+- Weakref measurement from the repository root:
+  source ~/lcd/bin/activate
+  python3 tests/unit/weakref_check.py > /tmp/practice9-j4-weakref.log 2>&1
+  rc=$?
+  cat /tmp/practice9-j4-weakref.log
+  exit "$rc"
+  Result: status 0. Verbatim output:
+checker alive, immediately: block freed=True, top-level freed=False
+checker alive, after gc.collect(): block freed=True, top-level freed=False
+checker deleted, immediately: block freed=True, top-level freed=True
+checker deleted, after gc.collect(): block freed=True, top-level freed=True
+  Interpretation: the block declaration is released immediately in both runs. With the checker alive, its scopes[0] retains the removed top-level declaration even after gc.collect(). With the checker deleted before optimization, both declarations are released immediately. No extra strong node references are held by the measurement script. nodes.py has no parent links; references to declarations are separate semantic links, not parent pointers.
+- Both final runner modes (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j4-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j4-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0. BOTH modes: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 27 passed, 0 failed (13 AST checks, 13 paired runtime/output/status checks, 1 existing .defs check); total 150 passed, 0 failed. All earlier outputs and error texts match their fixtures.
+- Protected-file and README-scope verification:
+  python3 /tmp/practice9-j4-integrity.py
+  Result: status 0; source files, original optimization fixtures, runner and existing unit tests match their pre-edit checksums; removing only the new usage entry and appended Optimizations section restores the exact original README bytes; README contains the real measurement; exactly 13 optimization programs are present.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: tests/opt/
+Changed by the student: README.md (deleted info about unit tests)
+Removed/rejected by the student: unit test (good - but not interested in realization, only in result)
+
+## [P9-J5a] Additional task, part A: effect analysis for calls without effects (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J5a — Additional task, part A: effect analysis for calls without effects.
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("ADDITIONAL TASK — CALLS WITHOUT EFFECTS"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (unit tests, tests/ok, tests/err, tests/opt, with and without REMOVE_UNUSED=1).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, ai_usage.txt.
+Do NOT edit other src files, README.md, test.sh or existing tests/opt files. Existing tests must stay green UNCHANGED.
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+This job implements ONLY effect analysis. Do NOT replace `has_call_or_read` in the existing optimization loop yet. Do NOT change which variables or functions `remove_unused` removes. Integration belongs to P9-J5b.
+
+Design (verify the facts with `rg -n` in src/semantic_checker.py first: MemberFnInfo has `.name`, `.struct_name`, `.mutating`, `.node`; MemberCallNode.fn_decl is a MemberFnInfo; global CallNode.fn_decl is a FnInfo without a body, so look the body up in `program.functions` by name; lambda bodies are the member function `call` of the structs in `program.generated_structs`):
+
+1. Function keys: ("fn", name) for global functions; (struct_name, member_name) for member functions and lambda `call`s (enumerate user structs and `program.generated_structs`).
+2. Per function, walk the body (do NOT descend into a nested LambdaNode body when analysing the enclosing function — declaring a lambda has no effect; the lambda's own `call` is analysed separately) and collect: direct effect = Print, ReadNode or WhileNode present; callees (global calls, this-calls, member calls, callable calls through `sugar`).
+3. Effect set as a FIXPOINT: start with (a) direct effects, (b) mutating member functions (`info.mutating`), (c) functions that can reach themselves in the call graph (direct or mutual recursion; conservatively treat recursion as potentially non-terminating). Then repeat: any caller of an effectful function becomes effectful, until nothing changes. A callable object's call is the call of its `call`. A call site of a mutating member function is an effect at the call site itself (keep it even when the result is unused).
+4. Implement the minimal helper(s) needed to compute the effect set and `has_effect(expr)` using that set. `has_effect(expr)` must be true if the expression contains read(), a call/member call to an effectful function, or a mutating member call. It must also inspect arguments (`quiet(loud(1))` is effectful). Keep these helpers separate from the existing pruning behavior for now. Avoid building a generic analysis framework if simple functions and dictionaries are sufficient.
+
+TDD: write failing unit tests first, derive expectations by hand. Test the effect analysis independently:
+- `square` and `quiet` from the spec are pure; `loud` is effectful because it prints.
+- A function calling `loud` is effectful through the call graph.
+- `quiet(loud(1))` has an effect because of its argument.
+- A mutating member function `bump` is effectful; a non-mutating `peek` is pure.
+- A function with a WhileNode is effectful.
+- A recursive function and mutually recursive functions are conservatively effectful.
+- A printing lambda is effectful; a pure lambda is not.
+- A mutating callable (`[mut n]` counter) is effectful.
+- A nested lambda body must not incorrectly make the enclosing function effectful merely because the lambda was declared.
+
+Acceptance: all new effect-analysis unit tests green; existing optimizer unit tests green; tests/opt unchanged and green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals). Verify that the existing `remove_unused` behavior has NOT changed. Do not modify old `.astc` expectations.
+
+Close-out: append one ai_usage.txt entry (ID P9-J5a, date 2026-11-06) using this prompt verbatim; no Git commands.
+Clarification from the student (verbatim): Keep a tree-only API; clarify how to obtain mutation info
+Files changed:
+- src/optimizer.py: added _call_key(node), analyze_effects(program) with a local scan() helper, and has_effect(expr, effects). Every pre-existing function and class, including has_call_or_read, UseCounter, Pruner and remove_unused, is textually unchanged.
+- tests/unit/test_optimizer.py: appended 11 test_effect_* methods for spec purity/printing and transitive callers, nested effectful arguments, mutating/pure/uncalled members, this-calls, WhileNode, global recursion and its caller, member recursion, printing/pure lambdas, mutable captures, independent nested-lambda analysis, read() in nested initializers and effectful call targets. Existing tests/expectations were not changed.
+- ai_usage.txt: appended this P9-J5a entry, preserving all earlier review records.
+What I did: Verified the authoritative PDF exists and read the additional-task requirements. Measured both full-runner baselines and the original unit suite before edits. Verified MemberFnInfo/FnInfo fields, call-site links, lambda generation, checked field-write flags and mutation settling with rg -n and targeted source reads. MemberFnNode has no attached MemberFnInfo, so I asked about accessing settled flags through checker.structs. The student required a tree-only API. Explained and implemented the tree-only route: settled info.mutating is available at call sites; checked AssignNode.is_this_field writes provide the same direct mutation seeds for methods without call-site metadata; call-graph propagation carries effects to callers. This includes mutable captures without editing the checker or nodes. Added failing tests before implementing helpers. The effect analysis enumerates global/user-member/generated-lambda bodies, skips nested LambdaNode bodies while scanning an enclosing body, builds a call graph, marks direct effects and mutations, detects functions that can reach themselves, then propagates effects to a fixpoint. has_effect checks read(), effectful callees, settled call-site mutation flags, arguments and receiver expressions; lambda declaration bodies are not executed effects. Kept these helpers entirely separate from pruning. Verified unchanged pruning ASTs, statistics and generated-struct lists on all 68 tests/ok + tests/opt programs, and verified every existing optimizer definition remains textually identical. Independently exercised analysis on all 68 checked programs: their AST dumps were unchanged and all 12 mutation-marked method instances from the checker were included in the inferred effect sets.
+Kept from existing code (deliberately untouched): all existing optimizer functions/classes and pruning rules; every existing unit test/expectation; all other src files; README.md; test.sh; all tests/opt files, including .astc snapshots; all previous student-review entries. The old conservative call/read retention remains active. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No P9-J5b integration, no replacement of has_call_or_read, no additional removals, no checker/node attachments and no generic analysis framework. Did not require checker.structs after the student's tree-only clarification. The initial new WhileNode test used an empty source block, which the parser rejects; corrected only that new source string to contain i32 dead{0} before implementing analysis. Its hand-derived expected effect stayed the same. No old expectations or compiler messages were changed. No dependency installation or unrelated edits.
+Needed elsewhere: none
+Verification:
+- Baseline before changes (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j5a-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j5a-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-baseline-flag.log
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-baseline-unit.log 2>&1
+  unit_rc=$?
+  tail -n 5 /tmp/practice9-j5a-baseline-unit.log
+  printf 'Baseline statuses: default=%s flagged=%s unit=%s\n' "$plain_rc" "$flag_rc" "$unit_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ] || [ "$unit_rc" -ne 0 ]; then exit 1; fi
+  Result: all statuses 0; each runner: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 27 passed, 0 failed; total 150 passed, 0 failed. Original unit suite: 25 passed, 0 failed.
+- TDD red phase, after correcting the new WhileNode source and before adding analysis helpers:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-unit-red.log 2>&1
+  rc=$?
+  rg '^Ran |^FAILED|AttributeError:|compilation error:' /tmp/practice9-j5a-unit-red.log
+  exit "$rc"
+  Result: status 1; 36 tests, 25 existing tests passed, 11 new tests errored solely because analyze_effects did not yet exist. No syntax/semantic errors remained in the new programs.
+- Final unit tests:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-unit.log 2>&1
+  rc=$?
+  tail -n 8 /tmp/practice9-j5a-unit.log
+  exit "$rc"
+  Result: status 0; 36 passed, 0 failed, including all original 25 tests and all 11 new effect-analysis cases. Expectations were derived by hand from the programs and spec.
+- Final unit tests with environment flag:
+  source ~/lcd/bin/activate
+  REMOVE_UNUSED=1 python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5a-unit-flag.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j5a-unit-flag.log
+  exit "$rc"
+  Result: status 0; 36 passed, 0 failed.
+- Both final full-runner modes:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j5a-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j5a-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5a-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0; BOTH modes: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 27 passed, 0 failed; total 150 passed, 0 failed. Existing output/error fixtures and all unchanged .astc/.defs comparisons pass.
+- Pruning behavior captured before edits and compared after adding helpers:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5a-snapshot.py > /tmp/practice9-j5a-behavior-before.json
+  [The command above ran before edits.]
+  python3 /tmp/practice9-j5a-snapshot.py > /tmp/practice9-j5a-behavior-after.json
+  cmp /tmp/practice9-j5a-behavior-before.json /tmp/practice9-j5a-behavior-after.json
+  Result: status 0; identical optimized AST dumps, stats dictionaries and generated-struct names/order for all 68 tests/ok + tests/opt programs.
+- Tree-only analysis and mutation coverage:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5a-analysis-check.py
+  Result: status 0; all 68 checked AST dumps unchanged by analyze_effects; all 12 settled mutating-method instances from checker metadata included by the tree-only analysis.
+- Existing-definition/protected-file integrity:
+  python3 /tmp/practice9-j5a-integrity.py
+  Result: status 0; every pre-existing optimizer function/class is textually unchanged; exactly _call_key, analyze_effects and has_effect added at module scope. All other src files, tests/opt fixtures, README, test.sh and other unit scripts match pre-edit checksums. Pruning snapshots remain identical.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: optimazer.py, test_optimizer.py
 Changed by the student: none
-Removed/rejected by the student: none
+Removed/rejected by the student: will be removed test_optimizer.py
+
+## [P9-J5b] Additional task, part B: integrate effect analysis into unused-code removal (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J5b — Additional task, part B: integrate effect analysis into unused-code removal.
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("ADDITIONAL TASK — CALLS WITHOUT EFFECTS"). P9-J5a has already implemented and tested effect analysis. Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (unit tests, tests/ok, tests/err, tests/opt, with and without REMOVE_UNUSED=1).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, tests/opt/fx\_\* (new files only), README.md (only one or two added lines in the existing "Optimizations" section), ai_usage.txt.\
+Do NOT edit other src files or existing tests. Existing tests/opt files must stay green UNCHANGED; if one breaks, report it (do not edit its .astc).
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+Use the effect-analysis helpers from P9-J5a. Do not reimplement the call graph, fixpoint computation or effect detection unless an actual bug requires a minimal fix. If the J5a implementation is missing or incompatible, STOP and report the problem instead of building a second implementation.
+
+Implement:
+
+1. Replace `has_call_or_read(expr)` in the unused-variable counting logic with `has_effect(expr)` from P9-J5a. A declaration is kept (counted as a read of itself) / an assignment keeps its target alive only if its value has_effect. Calls with no observable effects no longer keep an otherwise unused declaration or assignment alive.
+2. Recompute the effect set at the start of EVERY optimization round (removals change the tree). Keep counting function calls in the tree exactly as it stands (calls inside declarations that are about to be removed still count in that round) — this is what produces the 4 rounds in the spec example.
+3. Reuse the existing UseCounter, Pruner, Walker and fixpoint loop. Make only the minimum changes required to connect effect analysis to the current optimization. Preserve the existing statistics and removal-order behavior.
+4. Preserve observable behavior: stdout, input reads and exit values must remain equivalent with and without `--remove-unused`. Keep every call whose effect cannot be safely ruled out. Do not introduce any additional optimization beyond the specified calls-without-effects task.
+
+TDD: write failing tests first, derive by hand. Unit tests:
+
+- The spec example (square / quiet / loud; a, b, c): round 1 removes a and b, round 2 removes quiet, round 3 removes square, round 4 stops (stats: rounds == 4, removed_decls == ["a","b"], removed_functions == ["quiet","square"]); remaining program prints 5 and exits 0.
+- Counter example: a struct with `bump` (adds 1 to a field) and `peek` (reads the field): `i32 t{c.bump()}` stays and `print(c)` still shows `Counter{n: 1}`; `i32 u{c.peek()}` is removed.
+- An effect through a chain of two calls (`relay` calls a function that prints) is kept.
+- A function with a `while` is kept; a recursive function is kept; mutually recursive functions are kept.
+- A printing lambda and a pure lambda side by side: the printing lambda's unused-result declaration is kept, the pure one's is removed; lambda structures themselves remain where still reachable.
+- A mutating callable (`[mut n]` counter) call is kept.
+
+Then add end-to-end tests tests/opt/fx_square_chain, fx_counter, fx_relay, fx_loop_and_recursion, fx_lambdas, each with .txt, .astc and .expected (hand-derived; .expected must be identical with and without the flag; add .defs where the set of defined functions is the point). Ensure programs containing loops or recursion terminate in end-to-end tests, and use a timeout to prevent hangs.
+
+Acceptance: all unit tests green; tests/opt (old + fx\_\*) green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals); unchanged old tests/opt .astc files. Compare observable output and program exit values, not just successful compilation. On any discrepancy between a hand-derived expectation and the compiler, report it; do not change the expectation.
+
+Close-out: append one ai_usage.txt entry (ID P9-J5b, date 2026-11-06) using this prompt verbatim; no Git commands.
+Clarification/authorization from the student (verbatim): Allow these four unit-test source changes
+Authorization context: I identified four old retention tests whose callees were pure and whose assertions would conflict with the required additional-task behavior. Asked whether their callees could print while preserving their assertions and every existing tests/opt file. The student authorized those four source-only changes before they were made.
+Files changed:
+- src/optimizer.py: three integration lines in UseCounter only. on_program() computes self.effects = analyze_effects(node) at each round's entry; on_decl() and on_assign() use has_effect(..., self.effects). Existing call counting, statistics, pruning, fixpoint loop, Walker/children, and all J5a effect-analysis helpers unchanged.
+- tests/unit/test_optimizer.py: added OPT_DIR and mock.patch import; appended seven test_fx_* methods covering the spec's four-round order and one effect recomputation per round, bump/peek, relay, terminating loop/self/mutual recursion, pure/printing lambdas plus mutable captures and retained structures, pure assignment removal and effectful nested arguments. With explicit authorization, added print statements only to the callees in test_call_initializer_stays, test_effectful_assignment_keeps_target, test_nested_initializer_and_member_call_keep_effects, and test_field_read_and_call_target_are_visited; preserved their assertions and every other original test.
+- tests/opt/fx_square_chain.txt/.astc/.expected/.defs (new): spec program, only loud/c remaining, output 5 and program result 0, definitions main/_user_loud.
+- tests/opt/fx_counter.txt/.astc/.expected (new): bump retained, peek result removed, output Counter{n: 1} and program result 0.
+- tests/opt/fx_relay.txt/.astc/.expected (new): relay's call to a printing function retains the unused result; output 7 and program result 0.
+- tests/opt/fx_loop_and_recursion.txt/.astc/.expected/.defs (new): a loop stopping at 1, self recursion and mutual recursion decrementing n to zero; calls with unused results remain; printed program result 0; all four global functions defined.
+- tests/opt/fx_lambdas.txt/.astc/.expected/.defs (new): printing and pure lambdas plus a mutable-capture counter. Pure result b removed; printing result a and mutating result c stay; all three declared lambda structures/call methods remain. Output 5, then 2 from the second counter call, then program result 0.
+- README.md: exactly two added lines in Optimizations describing pure-call removal and retained effects.
+- ai_usage.txt: appended this P9-J5b entry; previous student-review records untouched.
+What I did: Verified the PDF and existing J5a helpers, then measured runners and units in both environment modes before edits. Identified the four old unit-source incompatibilities and obtained explicit authorization for minimal source redesign. Derived all new AST/output/definition fixtures by hand before compiler comparison. Added fixtures and seven tests before integration: 43 tests ran with four expected failures and no errors; all original 36 tests still passed at that point. Verified all five unflagged programs compile, terminate within ten-second subprocess timeouts and match hand-derived output. Then made the three-line UseCounter integration and the four authorized callee-print insertions. Effects are recomputed in on_program() each time the existing loop creates/visits a new counter; call counts still include all current-tree calls before pruning. The spec test verifies four analysis calls, four rounds, declaration removal order ['a', 'b'] and function removal order ['quiet', 'square']. Verified all old/new ASTs and definition-name lists, both full runners, both unit modes, and exact runtime stdout/stderr/status parity on all 73 tests/ok + tests/opt programs. Added per-subprocess ten-second timeouts and outer 180-second runner timeouts without editing test.sh. Verified source and documentation scope with stored checksums and textual comparisons.
+Kept from existing code (deliberately untouched): all other src files; all J5a helper implementations (_call_key/analyze_effects/has_effect); the complete remove_unused fixpoint loop and statistics code; Pruner, Walker, children and global-call counting; the unused legacy has_call_or_read helper; test.sh; every old tests/opt file, including .astc/.expected/.defs; tests/ok and tests/err; all original unit assertions; all prior ai_usage.txt review records.
+Considered but NOT done / rejected (with reason): No second effect-analysis implementation or fixes to J5a (helpers were compatible and tests exposed no analysis bug). No additional optimizations such as lambda/member removal, expression simplification or recursion/loop elimination. No rewriting old optimized snapshots. The four old unit callees were made genuinely effectful only after explicit student authorization; no old assertion was changed to hide a compiler bug. No runner edits, dependency installation, unrelated README changes or Git commands/metadata changes. No mismatch between any new hand-derived fixture and the integrated compiler occurred.
+Needed elsewhere: none
+Verification:
+- Baselines before edits, both runners and both unit environment modes (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j5b-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j5b-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-baseline-flag.log
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-baseline-unit.log 2>&1
+  unit_rc=$?
+  tail -n 5 /tmp/practice9-j5b-baseline-unit.log
+  REMOVE_UNUSED=1 python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-baseline-unit-flag.log 2>&1
+  unit_flag_rc=$?
+  tail -n 5 /tmp/practice9-j5b-baseline-unit-flag.log
+  printf 'Baseline statuses: default=%s flagged=%s unit=%s unit_flag=%s\n' "$plain_rc" "$flag_rc" "$unit_rc" "$unit_flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ] || [ "$unit_rc" -ne 0 ] || [ "$unit_flag_rc" -ne 0 ]; then exit 1; fi
+  Result: all statuses 0; each runner: 123 existing tests passed, 27 optimization checks passed, total 150 passed, 0 failed. Each unit mode: 36 passed, 0 failed.
+- TDD red phase, new tests added before integration and before the four authorized old-test source changes:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-unit-red.log 2>&1
+  rc=$?
+  rg '^test_fx|^Ran |^FAILED|^ERROR:|compilation error:' /tmp/practice9-j5b-unit-red.log
+  exit "$rc"
+  Result: status 1; 43 tests, 39 passed, 4 failed, no errors. Expected failures: square-chain removals/statistics, peek result retained, pure lambda result retained and pure assignment retained.
+- Unflagged new fixtures before integration: inline Python subprocess assertions compiled and ran all five fx_* programs with timeout=10 on compilation and lli execution. All stdout bytes matched the previously written .expected files, stderr was empty and process status was 0. Loop/recursion terminated normally.
+- Final default unit tests:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-unit.log 2>&1
+  rc=$?
+  tail -n 8 /tmp/practice9-j5b-unit.log
+  exit "$rc"
+  Result: status 0; 43 passed, 0 failed. Spec stats exactly rounds=4, removed_decls=['a', 'b'], removed_functions=['quiet', 'square']; analyze_effects called four times. Pure assignment test removes declaration and assignment before removing the uncalled callee in round 2, stopping in round 3.
+- Final unit tests with environment flag:
+  source ~/lcd/bin/activate
+  REMOVE_UNUSED=1 python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-unit-flag.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j5b-unit-flag.log
+  exit "$rc"
+  Result: status 0; 43 passed, 0 failed.
+- Exact AST and definition-name verification with ten-second per-command timeouts:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5b-opt-check.py
+  Result: status 0; all 18 optimized ASTs match exactly, including every unchanged old .astc. All four .defs files match names/order from flagged LLVM output (the existing chain plus new square-chain, recursion and lambda fixtures).
+- Full runners with hang protection:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  timeout 180s ./test.sh > /tmp/practice9-j5b-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-tests-default.log
+  REMOVE_UNUSED=1 timeout 180s ./test.sh > /tmp/practice9-j5b-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0, no timeout. BOTH modes: tests/ok + tests/err 123 passed, 0 failed; optimization checks 40 passed, 0 failed (18 AST, 18 paired execution checks, 4 definition-name checks); total 163 passed, 0 failed. Existing error texts match their fixtures.
+- Exact observable runtime parity, ten-second compile/execution timeouts:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5b-runtime-check.py > /tmp/practice9-j5b-runtime.log 2>&1
+  rc=$?
+  cat /tmp/practice9-j5b-runtime.log
+  exit "$rc"
+  Result: status 0; all 73 tests/ok + tests/opt programs compile and run with/without --remove-unused, match their expected-output convention, and have identical stdout bytes, stderr bytes and process exit values. fx_square_chain prints 5 then program result 0; fx_counter prints Counter{n: 1} then program result 0; fx_relay prints 7 then program result 0; fx_loop_and_recursion prints program result 0; fx_lambdas prints 5, 2, then program result 0. All five fx_* executions have process status 0 in both modes; input fixtures supplied when present.
+- Scope verification:
+  python3 /tmp/practice9-j5b-integrity.py
+  Result: status 0. Optimizer differs only at the three integration lines; all J5a helpers, loop, pruner, walker and other definitions identical. Existing optimization fixtures and protected files match pre-edit checksums. Only the four explicitly authorized old unit-source changes occurred; assertions and all other old test methods are unchanged, with seven new methods appended. Removing precisely the two new README lines restores its original bytes.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: tests/opt/.astc,.txt,.expected optimazer.py
+Changed by the student: nothing
+Removed/rejected by the student: unit tests, .defs

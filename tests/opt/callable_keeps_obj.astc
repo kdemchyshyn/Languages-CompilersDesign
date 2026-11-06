@@ -1,0 +1,17 @@
+Program
+  Struct Scale
+    Member factor i32 const
+    MemberFn call -> i32
+      Param v i32
+      Block
+        Decl r i32 const
+          BinOp *
+            Var factor
+            Var v
+        Exit
+          Var r
+  Decl c Scale const
+    Const 3
+  Exit
+    CallableCall c
+      Const 5

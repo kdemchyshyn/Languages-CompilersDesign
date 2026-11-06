@@ -1,0 +1,19 @@
+Program
+  Function loud -> i32
+    Param a i32
+    Block
+      Print
+        Var a
+      Exit
+        Var a
+  Function relay -> i32
+    Param a i32
+    Block
+      Exit
+        Call loud
+          Var a
+  Decl unused i32 const
+    Call relay
+      Const 7
+  Exit
+    Const 0

@@ -1,0 +1,14 @@
+Program
+  Decl k i32 const
+    Const 7
+  Lambda use -> i32
+    Struct lambda.use
+      Member k i32 const
+      MemberFn call -> i32
+        Block
+          Exit
+            Var k
+    Decl use lambda.use const
+      Var k
+  Exit
+    CallableCall use

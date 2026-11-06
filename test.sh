@@ -1,9 +1,14 @@
 #!/bin/bash
 
-COMPILER="python3 src/compiler.py"
+OPT_COMPILER="python3 src/compiler.py"
+COMPILER="$OPT_COMPILER"
+if [ "${REMOVE_UNUSED:-0}" = 1 ]; then
+    COMPILER="$COMPILER --remove-unused"
+fi
 PASS_DIR="tests/ok"
 FAIL_DIR="tests/err"
 OUTPUT_LL="test_output.ll"
+OUTPUT_OPT_LL="test_output_opt.ll"
 
 passed=0
 failed=0
@@ -105,7 +110,85 @@ for test_file in "$FAIL_DIR"/*.txt; do
     fi
 done
 
-rm -f "$OUTPUT_LL"
+echo "-------------------------"
+echo "Existing tests/ok + tests/err: $passed passed, $failed failed."
+existing_passed=$passed
+existing_failed=$failed
+
+echo "Testing optimizations (checked AST, output and exit status, optional definitions):"
+for test_file in tests/opt/*.txt; do
+    [ -f "$test_file" ] || continue
+    expected_ast_file="${test_file%.txt}.astc"
+    expected_file="${test_file%.txt}.expected"
+    in_file="${test_file%.txt}.in"
+    defs_file="${test_file%.txt}.defs"
+
+    ACTUAL_AST=$($OPT_COMPILER --remove-unused --ast-checked "$test_file" 2>&1)
+    ast_exit_code=$?
+    if [ $ast_exit_code -eq 0 ] && [ -f "$expected_ast_file" ] && \
+            [ "$ACTUAL_AST" = "$(cat "$expected_ast_file")" ]; then
+        echo "  ✅ [PASS] $test_file (Optimized AST Matched)"
+        passed=$((passed + 1))
+    else
+        echo "  ❌ [FAIL] $test_file (Optimized AST Mismatch or Generation Failed)"
+        echo "     Expected AST file: $expected_ast_file"
+        echo "     Got AST: '$ACTUAL_AST'"
+        failed=$((failed + 1))
+    fi
+
+    PLAIN_ERROR=$($OPT_COMPILER "$test_file" "$OUTPUT_LL" 2>&1)
+    plain_compilation_exit_code=$?
+    OPT_ERROR=$($OPT_COMPILER --remove-unused "$test_file" "$OUTPUT_OPT_LL" 2>&1)
+    opt_compilation_exit_code=$?
+
+    if [ $plain_compilation_exit_code -eq 0 ] && [ $opt_compilation_exit_code -eq 0 ] && \
+            [ -f "$expected_file" ] && command -v lli >/dev/null 2>&1; then
+        # The language exit value is printed on stdout. Compare process statuses
+        # separately; a matching nonzero status is not itself a test failure.
+        if [ ! -f "$in_file" ]; then
+            in_file=/dev/null
+        fi
+        PLAIN_OUTPUT=$(lli "$OUTPUT_LL" < "$in_file")
+        plain_exit_code=$?
+        OPT_OUTPUT=$(lli "$OUTPUT_OPT_LL" < "$in_file")
+        opt_exit_code=$?
+        EXPECTED_OUTPUT=$(cat "$expected_file")
+        if [ "$PLAIN_OUTPUT" = "$EXPECTED_OUTPUT" ] && \
+                [ "$OPT_OUTPUT" = "$EXPECTED_OUTPUT" ] && \
+                [ $plain_exit_code -eq $opt_exit_code ]; then
+            echo "  ✅ [PASS] $test_file (Both Outputs & Exit Statuses Matched)"
+            passed=$((passed + 1))
+        else
+            echo "  ❌ [FAIL] $test_file (Output or Exit Status Mismatch)"
+            echo "     Expected: '$EXPECTED_OUTPUT'"
+            echo "     Without flag (status $plain_exit_code): '$PLAIN_OUTPUT'"
+            echo "     With flag (status $opt_exit_code): '$OPT_OUTPUT'"
+            failed=$((failed + 1))
+        fi
+    else
+        echo "  ❌ [FAIL] $test_file (Compilation Failed, Missing Expected Output or lli)"
+        echo "     Without flag: $PLAIN_ERROR"
+        echo "     With flag: $OPT_ERROR"
+        failed=$((failed + 1))
+    fi
+
+    if [ -f "$defs_file" ]; then
+        if [ $opt_compilation_exit_code -eq 0 ]; then
+            ACTUAL_DEFS=$(grep '^define' "$OUTPUT_OPT_LL" | sed -E 's/^[^@]*@"?([^"(]+)"?\(.*/\1/')
+            EXPECTED_DEFS=$(cat "$defs_file")
+        fi
+        if [ $opt_compilation_exit_code -eq 0 ] && [ "$ACTUAL_DEFS" = "$EXPECTED_DEFS" ]; then
+            echo "  ✅ [PASS] $test_file (Defined Function Names Matched)"
+            passed=$((passed + 1))
+        else
+            echo "  ❌ [FAIL] $test_file (Defined Function Names Mismatch or Compilation Failed)"
+            failed=$((failed + 1))
+        fi
+    fi
+done
+
+echo "Optimization checks: $((passed - existing_passed)) passed, $((failed - existing_failed)) failed."
+rm -f "$OUTPUT_LL" "$OUTPUT_OPT_LL"
 
 echo "========================="
 echo "Test Summary: $passed passed, $failed failed."

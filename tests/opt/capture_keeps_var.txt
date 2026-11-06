@@ -1,0 +1,6 @@
+i32 k{7}
+fn use := [k]() -> i32
+{
+    exit k
+}
+exit use()

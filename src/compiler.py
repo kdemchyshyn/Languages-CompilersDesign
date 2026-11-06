@@ -5,6 +5,7 @@ from lexer import lex
 from parser import Parser
 from semantic_checker import SemanticChecker
 from code_generator import CodeGen
+from optimizer import remove_unused
 
 parser = argparse.ArgumentParser(description="Compiler Frontend Skeleton")
 parser.add_argument("input", help="Path to the input source file (e.g., input.txt)")
@@ -12,7 +13,8 @@ parser.add_argument("output", nargs="?", help="Path to the output LLVM IR file (
 parser.add_argument("--tokens", action="store_true", help="Print the generated tokens")
 parser.add_argument("--ast", action="store_true", help="Print the generated AST")
 parser.add_argument("--ast-checked", action="store_true", help="Print the AST after semantic checking")
-args = parser.parse_args()
+parser.add_argument("--remove-unused", action="store_true", help="Remove unused declarations and functions")
+args = parser.parse_intermixed_args()
 
 lines = []
 with open(args.input, "rb") as fp:
@@ -32,6 +34,8 @@ if args.ast:
 
 if args.ast_checked:
     SemanticChecker().visit_program(program)
+    if args.remove_unused:
+        program = remove_unused(program)
     program.dump()
     sys.exit(0)
 
@@ -42,6 +46,8 @@ if not args.output:
 
 semantic_checker = SemanticChecker()
 semantic_checker.visit_program(program)
+if args.remove_unused:
+    program = remove_unused(program)
 
 codegen = CodeGen()
 program.accept(codegen)
