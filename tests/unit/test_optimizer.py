@@ -1,5 +1,7 @@
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
@@ -134,9 +136,9 @@ exit 0
         tree.accept(codegen)
         binding.parse_assembly(str(codegen.module)).verify()
 
-    def test_unread_parameter_and_uncalled_function_stay(self):
+    def test_unread_parameter_stays(self):
         tree = checked("fn f := (i32 unused) -> i32\n{\n"
-                       " i32 dead{2}\n exit 1\n}\nexit 0\n")
+                       " i32 dead{2}\n exit 1\n}\nexit f(0)\n")
         function = tree.functions[0]
         parameter = function.params[0]
         remove_unused(tree)
@@ -295,6 +297,161 @@ exit 0
         self.assertEqual(counter.reads[id(closure.decl)], 1)
         self.assertEqual(counter.reads[id(local)], 1)
         self.assertNotIn(id(None), counter.reads)
+
+    def test_unused_function_chain(self):
+        tree = checked("""fn twice := (i32 a) -> i32
+{
+    i32 r{a + a}
+    exit r
+}
+fn helper := (i32 a) -> i32
+{
+    exit twice(a)
+}
+fn unused := () -> i32
+{
+    exit helper(1)
+}
+exit twice(2)
+""")
+        stats = {}
+        remove_unused(tree, stats)
+        self.assertEqual(stats["removed_functions"], ["unused", "helper"])
+        self.assertEqual(stats["rounds"], 3)
+        self.assertEqual(stats["removed_decls"], [])
+        self.assertEqual([fn.name for fn in tree.functions], ["twice"])
+
+    def test_mutually_recursive_unused_functions_stay(self):
+        tree = checked("fn first := () -> i32\n{\n exit second()\n}\n"
+                       "fn second := () -> i32\n{\n exit first()\n}\nexit 0\n")
+        before = tree.functions[:]
+        stats = {}
+        remove_unused(tree, stats)
+        self.assertEqual(tree.functions, before)
+        self.assertEqual(stats["removed_functions"], [])
+        self.assertEqual(stats["rounds"], 1)
+
+    def test_self_recursive_unused_function_stays(self):
+        tree = checked("fn recurse := () -> i32\n{\n exit recurse()\n}\nexit 0\n")
+        function = tree.functions[0]
+        stats = {}
+        remove_unused(tree, stats)
+        self.assertEqual(tree.functions, [function])
+        self.assertEqual(stats["removed_functions"], [])
+        self.assertEqual(stats["rounds"], 1)
+
+    def test_global_call_from_member_function_keeps_function(self):
+        tree = checked("""struct Object
+{
+    i32 value
+    fn get := () -> i32
+    {
+        exit global()
+    }
+}
+fn global := () -> i32
+{
+    exit 1
+}
+exit 0
+""")
+        function = tree.functions[0]
+        method = tree.structs[0].methods[0]
+        remove_unused(tree)
+        self.assertEqual(tree.functions, [function])
+        self.assertEqual(tree.structs[0].methods, [method])
+
+    def test_global_call_from_lambda_body_keeps_function(self):
+        tree = checked("fn global := () -> i32\n{\n exit 1\n}\n"
+                       "fn f := []() -> i32\n{\n exit global()\n}\nexit f()\n")
+        function = tree.functions[0]
+        closure = tree.statements[0]
+        remove_unused(tree)
+        self.assertEqual(tree.functions, [function])
+        self.assertEqual(tree.statements, [closure])
+        self.assertEqual(tree.generated_structs, [closure.struct])
+
+    def test_this_and_callable_calls_are_not_global_calls(self):
+        tree = checked("""struct Object
+{
+    i32 value
+    fn helper := () -> i32
+    {
+        exit value
+    }
+    fn call := (i32 v) -> i32
+    {
+        exit helper()
+    }
+}
+fn helper := () -> i32
+{
+    exit 9
+}
+Object c{0}
+exit c(5)
+""")
+        methods = tree.structs[0].methods[:]
+        c = tree.statements[0]
+        counter = optimizer.UseCounter()
+        counter.visit(tree)
+        self.assertEqual(getattr(counter, "calls", None), {"helper": 0})
+        remove_unused(tree)
+        self.assertEqual(tree.functions, [])
+        self.assertEqual(tree.structs[0].methods, methods)
+        self.assertEqual(tree.statements, [c])
+
+    def test_lambdas_in_removed_function_are_not_emitted(self):
+        source = """fn leaf := () -> i32
+{
+    exit 7
+}
+fn unused := () -> i32
+{
+    fn doomed := []() -> i32
+    {
+        fn nested_doomed := []() -> i32
+        {
+            exit leaf()
+        }
+        exit nested_doomed()
+    }
+    exit doomed()
+}
+fn keep := []() -> i32
+{
+    fn nested_keep := []() -> i32
+    {
+        exit 3
+    }
+    exit nested_keep()
+}
+exit keep()
+"""
+        tree = checked(source)
+        keep = tree.statements[0]
+        nested_keep = keep.body.statements[0]
+        stats = {}
+        remove_unused(tree, stats)
+        self.assertEqual(tree.functions, [])
+        self.assertEqual(stats["removed_functions"], ["unused", "leaf"])
+        self.assertEqual(stats["rounds"], 3)
+        self.assertEqual(tree.generated_structs, [keep.struct, nested_keep.struct])
+
+        compiler = Path(__file__).resolve().parents[2] / "src/compiler.py"
+        with tempfile.TemporaryDirectory(prefix="practice9-lambda-") as temp:
+            input_path = Path(temp) / "program.txt"
+            output_path = Path(temp) / "program.ll"
+            input_path.write_text(source)
+            compiled = subprocess.run(
+                [sys.executable, str(compiler), "--remove-unused",
+                 str(input_path), str(output_path)], capture_output=True)
+            self.assertEqual(compiled.returncode, 0, compiled.stderr.decode())
+            self.assertEqual((compiled.stdout, compiled.stderr), (b"", b""))
+            result = subprocess.run(["lli", str(output_path)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(result.stdout, b"Program exit with result 3\n")
+            self.assertEqual(result.stderr, b"")
 
 
 if __name__ == "__main__":

@@ -241,3 +241,108 @@ Open questions: none
 Kept as-is: optimizer.py, test_....py (Checked ast tree after optimization in console)
 Changed by the student: nothing
 Removed/rejected by the student: nothing for now
+
+## [P9-J3] Task 2: remove unused global functions (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J3 — Task 2: remove unused global functions (reuses the Task 1 loop).
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("TASK 2"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (tests/ok + tests/err with and without REMOVE_UNUSED=1, plus tests/opt and unit tests).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, tests/opt/unused_fn_chain.txt/.astc/.expected/.defs (new), ai_usage.txt.
+Do NOT touch anything else; report other needs under "Needed elsewhere".
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+Facts to verify with `rg -n` before coding: a global call is a CallNode with `sugar is None`, `is_this_call` False and `fn_decl` a FnInfo (name = node.func_name); a this-call has `is_this_call` True (member function, NOT a global call); callable-object calls go through `sugar` (a MemberCallNode, not a global call). Codegen (src/code_generator.py visit_program) emits every struct of `node.structs + node.generated_structs` and every function of `node.functions`.
+
+Implement:
+1. Extend the counter with `calls[name]`: initialise 0 for every function in `program.functions`; count each global CallNode wherever it stands (statements, function bodies, member functions, lambda bodies, even inside functions that are removed in this same round). Self-calls count, so recursive and mutually recursive unused functions stay (document this as a known limit in a comment).
+2. Pruner: remove functions with 0 calls from `program.functions` (rebuild the list). Member functions and lambdas are never removed. Do it in the same round as declarations (one counter run per round), fill `stats["removed_functions"]` in order.
+3. IMPORTANT codegen trap: lambda structs live in `program.generated_structs`, and codegen emits all of them. After each prune, rebuild `generated_structs` keeping only the structs of LambdaNodes that are still reachable in the tree (walk the tree, collect `LambdaNode.struct`, filter the existing list by identity, keep the original order, include nested lambdas). Avoid retaining generated structs reachable only through removed subtrees. Otherwise a lambda inside a removed function would still be emitted and look up a removed function in `llvm_functions` (KeyError).
+4. The loop stops when a round removes nothing (neither declarations nor functions).
+
+TDD: write failing tests first, then implement. Unit tests (hand-derived): the three-function chain from the spec (twice / helper / unused, exit twice(2)): iteration 1 removes unused; iteration 2 removes helper; iteration 3 finds twice still called and stops. Assert removed_functions == ["unused","helper"], rounds == 3. Also test: two functions calling only each other stay; a self-recursive unused function stays; a function called only from a member function stays; a function called only from a lambda body stays; a lambda declared inside an unused function that calls another global function: both the function and (after iterating) the callee are removed AND the full compile with the flag still succeeds and runs. Add tests/opt/fn_chain.* : .txt = the spec's three-function program; .expected = `Program exit with result 4` using the existing test runner's output/exit-value convention; .astc = tree with only `twice` (Function twice -> i32 / Param a i32 / Block / Decl r i32 const / BinOp + / Var a / Var a / Exit / Var r) followed by the top-level Exit with a `Call twice` node (derive it exactly from the dump() methods in src/nodes.py); .defs = the two defined names that appear in the flagged .ll (`_user_twice` and `main`; check the exact names emitted in `grep '^define'` output and store names only, not whole define lines).
+
+Acceptance: all unit tests green; tests/opt (warm-ups + fn_chain) green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals). Report, do not paper over, any mismatch between your hand-derived expectation and the compiler.
+
+Close-out: append one ai_usage.txt entry (ID P9-J3, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- src/optimizer.py: UseCounter.__init__(), on_program() and on_call() count global calls; Pruner.__init__(), on_program() and on_lambda() remove zero-call functions and collect reachable lambda-struct identities; remove_unused() handles both dead sets, function statistics and the joint stopping condition. Added the known recursive-cycle limitation as a comment.
+- tests/unit/test_optimizer.py: added seven Task 2 tests (function chain, mutual recursion, self recursion, calls from member/lambda bodies, exclusion of this/callable calls, and dead/reachable nested-lambda structs with a full compiler/lli check). Renamed the parameter-preservation test and made its function reachable, since removing uncalled global functions is now required. Added subprocess/tempfile imports for the end-to-end test.
+- tests/opt/unused_fn_chain.txt (new): the spec's twice/helper/unused program, with the braces required by the existing grammar.
+- tests/opt/unused_fn_chain.astc (new): hand-derived checked tree containing only twice and the top-level call.
+- tests/opt/unused_fn_chain.expected (new): hand-derived 'Program exit with result 4'.
+- tests/opt/unused_fn_chain.defs (new): defined names only, main then _user_twice in codegen emission order.
+- ai_usage.txt: appended this P9-J3 entry; previous entries and student-review fields untouched.
+What I did: Verified the authoritative PDF exists and consulted TASK 2. Measured default/flagged runner and unit baselines before edits. Used rg -n and targeted reads to verify FnInfo global-call metadata, is_this_call member-call metadata, callable sugar, and codegen's emission of original/generated structs and all remaining global functions. Derived new fixture contents from the spec, dump() methods and codegen construction order before comparing with compiler output. Added tests first (25 tests, 3 failures, no errors), then extended the existing single counter/pruner loop. Each round counts calls even in functions removed in that round, removes zero-call global functions in source order, and filters generated_structs by the identities of lambdas found while pruning the surviving tree. The same traversal includes reachable nested lambdas and excludes lambdas inside removed functions. The function chain removes unused and then helper over two changing rounds, followed by the third no-change round. The full nested-lambda test removes unused and its leaf callee, retains the two reachable generated structs in order, and compiles/runs with --remove-unused successfully.
+Kept from existing code (deliberately untouched): compiler CLI, lexer, parser, checker, nodes, code_generator, test.sh, README.md, all pre-existing tests/opt/ok/err sources and fixtures, and Task 1's declaration/effect rules and Walker/children helpers. Member functions and surviving LambdaNodes remain. Existing student-review records remain unchanged.
+Considered but NOT done / rejected (with reason): No graph reachability analysis to remove recursive function cycles (the required counting approach intentionally retains self/mutual recursion; documented in code). No optional effect analysis, Task 3 note or unrelated changes. No additional collector class or traversal was needed: Pruner collects surviving lambda identities during its existing walk. Used unused_fn_chain.* from ALLOWED FILES instead of the shorter fn_chain.* shorthand later in the prompt. The earlier parameter test's uncalled-function assumption belonged to Task 1; making that function called preserves the parameter assertion under Task 2 without changing an expectation to hide a bug. No fixture expectation mismatches occurred. No dependency installation or Git commands/metadata changes.
+Needed elsewhere: none
+Verification:
+- Baseline before edits (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j3-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j3-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-baseline-flag.log
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j3-baseline-unit.log 2>&1
+  unit_rc=$?
+  tail -n 5 /tmp/practice9-j3-baseline-unit.log
+  printf 'Baseline statuses: default=%s flagged=%s unit=%s\n' "$plain_rc" "$flag_rc" "$unit_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ] || [ "$unit_rc" -ne 0 ]; then exit 1; fi
+  Result: all statuses 0. Each runner mode: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 4 passed, 0 failed; total 127 passed, 0 failed. Unit tests: 18 passed, 0 failed.
+- TDD red phase, tests added before optimizer implementation:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j3-unit-red.log 2>&1
+  rc=$?
+  rg '^test_|^Ran |^FAILED|^OK|^ERROR:' /tmp/practice9-j3-unit-red.log
+  exit "$rc"
+  Result: status 1; 25 tests, 22 passed, 3 failed, no errors. Failures were the chain retaining uncalled functions, missing call-count state, and the dead-function/nested-lambda removal case.
+- Final units from repository root:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j3-unit.log 2>&1
+  rc=$?
+  tail -n 31 /tmp/practice9-j3-unit.log
+  exit "$rc"
+  Result: status 0; 25 passed, 0 failed. Includes removed_functions == ['unused', 'helper'], rounds == 3; intentional retention of unused recursive cycles; member/lambda-only global callees; exclusion of this/callable calls; and nested-lambda cleanup with successful flagged compile/lli execution printing 'Program exit with result 3', status 0.
+- Final units from src/:
+  source ~/lcd/bin/activate
+  cd src
+  python3 ../tests/unit/test_optimizer.py -v > /tmp/practice9-j3-unit-from-src.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j3-unit-from-src.log
+  exit "$rc"
+  Result: status 0; 25 passed, 0 failed.
+- Final full runners (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j3-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j3-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j3-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0. BOTH modes: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 7 passed, 0 failed; total 130 passed, 0 failed. Both warm-up ASTs and runtime comparisons remain green; the new function-chain AST, runtime pair and defined-name comparison are green. All existing error messages match their fixtures.
+- Explicit flagged chain compile, define inspection and execution:
+  source ~/lcd/bin/activate
+  python3 src/compiler.py tests/opt/unused_fn_chain.txt --remove-unused /tmp/practice9-j3-fn-chain.ll
+  rc=$?
+  if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+  grep '^define' /tmp/practice9-j3-fn-chain.ll
+  lli /tmp/practice9-j3-fn-chain.ll
+  Result: status 0; definitions appear as define i32 @"main"() then define i32 @"_user_twice"(i32 %".1"); output is 'Program exit with result 4'. The names-only fixture was derived before this observation and matched.
+- Exact runtime parity check (temporary script reuses the previous stage's generic checker with a J3 temporary-directory prefix):
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j3-runtime-check.py
+  Result: status 0; all 58 tests/ok + tests/opt programs compiled without/with --remove-unused, ran through lli with their input fixtures, matched existing expected stdout, and produced identical stdout bytes, stderr bytes and process exit statuses. The function chain prints result 4 and both variable warm-ups print results 15 and 10, all with process status 0.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: optimazer.py and tests for optimazer (in tests/)
+Changed by the student: nothing
+Removed/rejected by the student: noting (later - delete defs file, check using files)

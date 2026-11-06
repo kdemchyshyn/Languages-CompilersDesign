@@ -18,10 +18,12 @@ def remove_unused(tree, stats=None):
         dead = {id(decl) for decl in counter.decls
                 if counter.reads[id(decl)] == 0
                 and not getattr(decl, "is_closure", False)}
-        pruner = Pruner(dead)
+        dead_functions = {name for name, count in counter.calls.items() if count == 0}
+        pruner = Pruner(dead, dead_functions)
         pruner.visit(tree)
         stats["removed_decls"].extend(pruner.removed)
-        if not pruner.removed:
+        stats["removed_functions"].extend(pruner.removed_functions)
+        if not pruner.removed and not pruner.removed_functions:
             return tree
 
 
@@ -78,6 +80,7 @@ def has_call_or_read(expr):
 class UseCounter(Walker):
     def __init__(self):
         self.reads = {}
+        self.calls = {}
         self.decls = []
         self.seen = set()
 
@@ -86,6 +89,18 @@ class UseCounter(Walker):
             return
         self.seen.add(id(node))
         return super().visit(node)
+
+    def on_program(self, node):
+        self.calls = {function.name: 0 for function in node.functions}
+        for child in children(node):
+            self.visit(child)
+
+    def on_call(self, node):
+        if node.sugar is None and not getattr(node, "is_this_call", False):
+            # Self-calls and mutually recursive cycles count, so unused cycles stay.
+            self.calls[node.func_name] += 1
+        for child in children(node):
+            self.visit(child)
 
     def on_decl(self, node):
         self.decls.append(node)
@@ -112,14 +127,32 @@ class UseCounter(Walker):
 
 
 class Pruner(Walker):
-    def __init__(self, dead):
+    def __init__(self, dead, dead_functions):
         self.dead = dead
+        self.dead_functions = dead_functions
         self.removed = []
+        self.removed_functions = []
+        self.lambda_structs = set()
 
     def on_program(self, node):
+        functions = []
+        for function in node.functions:
+            if function.name in self.dead_functions:
+                self.removed_functions.append(function.name)
+            else:
+                functions.append(function)
+        node.functions = functions
         for child in node.structs + node.functions:
             self.visit(child)
         self.on_block(node)
+        node.generated_structs = [struct for struct in node.generated_structs
+                                  if id(struct) in self.lambda_structs]
+
+    def on_lambda(self, node):
+        if node.struct is not None:
+            self.lambda_structs.add(id(node.struct))
+        for child in children(node):
+            self.visit(child)
 
     def on_block(self, node):
         statements = []
