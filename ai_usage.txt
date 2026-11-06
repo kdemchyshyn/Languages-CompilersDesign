@@ -147,3 +147,97 @@ Open questions: none
 Kept as-is: optimizer.py, compile.py
 Changed by the student: name of the tests (warmup -> unused_var) to fit what it is testing
 Removed/rejected by the student: nothing for now - plan to remove test_optimizer.py and leave only behavior check
+
+## [P9-J2] Task 1: remove unused variables (counting visitor + pruner + loop) (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J2 — Task 1: remove unused variables (counting visitor + pruner + loop).
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("TASK 1"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (tests/ok + tests/err, with and without REMOVE_UNUSED=1).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, ai_usage.txt.
+Do NOT touch: any other src file, test.sh, README.md, existing tests. If the checker or nodes need a change (e.g. a missing `decl` link), STOP and report under "Needed elsewhere" instead of editing.
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+Use `rg -n` to check these facts in src/semantic_checker.py and src/nodes.py before coding:
+- `.decl` is set on VarNode, FieldNode (local base) and AssignNode; it is None for fields of `this` and lambda captures (`is_this_field`). Parameters use throwaway DeclNodes that are never in a block. Guard every `.decl` use with `is not None`.
+- DeclNode initialisers are `node.init.values` (InitListNode, possibly nested), not `inits`.
+- A callable call `c(5)` is a CallNode with `.sugar` = MemberCallNode whose target is a VarNode/FieldNode with `.decl`. The counter MUST descend into `sugar`; otherwise `c` loses its read.
+- A LambdaNode has `.decl` (closure DeclNode, `is_closure=True`) and `.struct`; the lambda body is the same BlockNode that is inside `program.generated_structs`. The captures' VarNodes inside `decl.init` are real reads of the captured variables. Avoid double-counting reads if the same shared AST subtree is reachable through more than one traversal path.
+
+Implement with the Walker/children helpers from P9-J1:
+1. UseCounter(Walker): `reads` dict keyed by id(DeclNode). on_decl: setdefault 0; if any init value contains a CallNode/MemberCallNode/ReadNode, count a read of the decl itself (kept). on_var / on_field: count a read of `.decl` (guarded), and for FieldNode also visit `target` when not None. on_assign: do NOT count the target; visit only the value; if the value contains a call/read, count a read of `node.decl` (guarded). Everything else: visit children. Write the call/read test as one function `has_call_or_read(expr)` (it will be replaced in a later job).
+2. Dead set = tree DeclNodes (found during the walk) with 0 reads, excluding closure decls (`is_closure`), excluding parameters.
+3. Pruner: rebuild `statements` lists IN PLACE (`block.statements = [...]`) for the Program, function bodies, member-function bodies, if/else blocks, while bodies and lambda bodies (the shared BlockNode). Drop a dead DeclNode and every AssignNode whose `decl` is dead. Never delete from a list while iterating it. Do not touch `exit`, params, fields, lambdas or if/while nodes (an if whose block becomes empty stays).
+4. `remove_unused`: loop until a round removes nothing; fill `stats` (rounds counts all executed rounds including the final one that removes nothing; removed_decls in removal order). Task 2 (functions) is NOT part of this job.
+
+TDD: first add/extend failing unit tests in tests/unit/test_optimizer.py, then implement. Tests to have (derive expectations by hand): warm-up 1 (rounds 3, removed ["y","x"]); warm-up 2 (rounds 2, removed ["x"], inner x and `r := x` survive); `y := 5` on an unread y (decl and assignment both removed, codegen-ready tree); `p.x := 5` on an unread struct variable p; an unread parameter stays; `k := k + 1` with nobody else reading k survives; a capture in a reachable lambda keeps its variable; `c(5)` keeps c when the callable object is actually used; a decl whose value calls a function stays; `read()` initialiser stays; an if block whose only content is removed stays as an empty block; shadowed names counted per declaration. Also run the full compiler end-to-end on warm-up 1 and 2 with the flag and check the tests/opt warm-up tests from P9-J1 are now green.
+
+Acceptance: unit tests green; tests/opt warm-up tests green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals). Do not edit expectations to match a bug; on a discrepancy, report it.
+
+Close-out: append one ai_usage.txt entry (ID P9-J2, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- src/optimizer.py: implemented remove_unused() fixed-point loop and statistics; added has_call_or_read(), UseCounter and Pruner; added ReadNode import. Existing Walker and children helpers retained.
+- tests/unit/test_optimizer.py: extended both warm-ups with tree/link assertions; added 14 tests for dead declarations/assignments, codegen readiness, parameters/functions, self-reads, captures, callable sugar, calls/read effects, nested initializers, fields/call targets, empty branches/loops, member/lambda bodies and shared-node counting; added CodeGen/LLVM verification imports.
+- ai_usage.txt: appended this P9-J2 entry; earlier entries and student-review fields untouched.
+What I did: Measured both baseline modes before edits in the existing ~/lcd environment. Verified docs/CS400_Practice_9.pdf exists and consulted TASK 1. Used rg -n and targeted reads to confirm local declaration links, None links for this/captured fields, synthetic parameter declarations outside statement lists, node.init.values, callable sugar targets, closure declaration initializers and shared lambda/generated-method bodies. Added tests first: 18 tests ran with 8 expected failures and no errors against the stub. Then implemented declaration-identity read counting, conservative call/read retention, unique-node visitation, pruning of zero-read tree declarations and their assignments, and iteration through the final no-change round. Only statement-list attributes are rebuilt, retaining block identity and all exits/parameters/fields/lambdas/if/while nodes. Verified all unit tests, both full-suite modes and exact runtime stdout/stderr/status parity for all 57 executable test programs.
+Kept from existing code (deliberately untouched): compiler CLI and checker invocation, lexer, parser, semantic_checker, nodes, code_generator, test.sh, README.md, every existing source/expected/AST fixture, the existing children()/Walker traversal contract, and prior ai_usage.txt review records. Existing optimization fixtures are now named unused_var_chain and unused_var_shadow; used those files without changing them. Parameters are excluded by collecting only DeclNodes reached as tree children, not by following .decl back-links. Closure declarations are explicitly excluded from the dead set; functions are never removed.
+Considered but NOT done / rejected (with reason): No Task 2 function removal or optional effect analysis (outside this job). Calls and read() remain conservative effects through one has_call_or_read() function. No checker/node changes (required links already exist), no fixture rewrites, no dependency installation, no unrelated refactoring. No Git commands or Git metadata changes.
+Needed elsewhere: none
+Verification:
+- Both baselines, before source/test edits (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j2-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j2-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-baseline-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: existing tests/ok + tests/err: 123 passed, 0 failed in each mode; optimization checks: 2 passed, 2 failed; total 125 passed, 2 failed in each mode. Both runner statuses 1 solely for the pre-existing P9-J1 red optimized-AST comparisons.
+- TDD red phase, after adding tests and before implementing the optimizer:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j2-unit-red.log 2>&1
+  rc=$?
+  rg '^test_|^Ran |^FAILED|^OK|^ERROR:' /tmp/practice9-j2-unit-red.log
+  exit "$rc"
+  Result: status 1; 18 tests, 10 passed, 8 failed, no errors. Failures: both warm-ups, missing UseCounter, dead scalar/field assignments, pruning empty branches/loop, function-local removal and shared lambda/member body removal. Expected outputs/tree identities were derived by hand before execution.
+- Final unit tests from repository root:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j2-unit.log 2>&1
+  rc=$?
+  tail -n 24 /tmp/practice9-j2-unit.log
+  exit "$rc"
+  Result: status 0; 18 passed, 0 failed. Dead-assignment tests generate IR through the existing llvmlite.ir CodeGen and verify the result with binding.parse_assembly(...).verify(). Warm-up rounds/removal order: 3 / ['y', 'x'] and 2 / ['x']; inner shadowed declaration and assignment remain.
+- Final unit tests from src/:
+  source ~/lcd/bin/activate
+  cd src
+  python3 ../tests/unit/test_optimizer.py -v > /tmp/practice9-j2-unit-from-src.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j2-unit-from-src.log
+  exit "$rc"
+  Result: status 0; 18 passed, 0 failed.
+- Both full suites after implementation (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j2-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j2-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j2-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: status 0; in BOTH modes existing tests/ok + tests/err: 123 passed, 0 failed; optimization checks: 4 passed, 0 failed; total 127 passed, 0 failed. Both warm-up checked ASTs match the existing snapshots and both execution comparisons pass. Existing error diagnostics match their fixtures in both modes.
+- Additional end-to-end runtime comparison (script under /tmp, no repository fixture changes):
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j2-runtime-check.py
+  Result: status 0; 57 programs (tests/ok and tests/opt) each compiled without/with --remove-unused and executed through lli with their .in files when present. Both stdout results match the existing .expected convention; exact stdout bytes, stderr bytes and process return codes match between modes. unused_var_chain.txt prints 'Program exit with result 15', process status 0; unused_var_shadow.txt prints 'Program exit with result 10', process status 0.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: optimizer.py, test_....py (Checked ast tree after optimization in console)
+Changed by the student: nothing
+Removed/rejected by the student: nothing for now
