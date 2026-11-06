@@ -1,0 +1,7 @@
+fn loud := () -> i32
+{
+    print(9)
+    exit 4
+}
+i32 unused{loud()}
+exit 0

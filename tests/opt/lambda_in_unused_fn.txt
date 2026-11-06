@@ -1,0 +1,13 @@
+fn leaf := () -> i32
+{
+    exit 9
+}
+fn unused := () -> i32
+{
+    fn local := []() -> i32
+    {
+        exit leaf()
+    }
+    exit local()
+}
+exit 0

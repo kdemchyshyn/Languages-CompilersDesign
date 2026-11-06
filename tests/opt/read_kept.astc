@@ -1,0 +1,5 @@
+Program
+  Decl unused i32 const
+    Read
+  Exit
+    Const 0

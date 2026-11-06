@@ -346,3 +346,103 @@ Open questions: none
 Kept as-is: optimazer.py and tests for optimazer (in tests/)
 Changed by the student: nothing
 Removed/rejected by the student: noting (later - delete defs file, check using files)
+
+## [P9-J4] Task 3: complete tests/opt, verify both-ways runs, write the README note (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+
+JOB P9-J4 — Task 3: complete tests/opt, verify both-ways runs, write the README note.
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("TASK 3"). Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first.
+
+ALLOWED FILES: tests/opt/* (new files only), tests/unit/weakref_check.py (new), test.sh (only if a bug in the tests/opt section from P9-J1 must be fixed), README.md (only the new "Optimizations" section and the usage list), ai_usage.txt.
+Do NOT edit src/*. If a new test exposes a bug in src/optimizer.py or elsewhere, DO NOT fix it: record the test as failing, and report it under "Needed elsewhere" with the minimal reproducer.
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+1. Add tests/opt programs. Every one: NAME.txt, NAME.astc (the tree printed by `--remove-unused --ast-checked`) and NAME.expected (identical observable output with and without the flag, following the existing test runner's stdout/exit-value convention). Derive .astc and .expected BY HAND from the program, the spec, and the dump() methods in src/nodes.py; only then compare with the compiler. Existing tests: warmup_chain, warmup_shadow, fn_chain (keep unchanged). Design new tests so that their expected optimized AST also remains valid after the additional calls-without-effects task in J5, unless the specification requires otherwise. If this conflicts with a required test case, STOP and ask. New:
+   decl_in_if (a dead declaration inside an if block; make the block become empty and still compile and run); kept_call_prints (a declaration kept because its value calls a function that PRINTS — the callee must print, so the result does not change when the "calls without effects" extension lands); nothing_removed (no pure calls in unused declarations, for the same reason); read_kept (a dead decl initialised by read() stays; add NAME.in); self_feeding (`k := k + 1` with nobody else reading k survives); unused_assign (`y := 5` on an unread y and `p.x := 5` on an unread struct p: declarations and assignments gone); capture_keeps_var (a reachable lambda captures a variable nobody else reads: the variable stays; ensure the lambda is actually used); callable_keeps_obj (`c(5)` keeps c; ensure the call is observable or its result is used so this stays valid after J5); param_unused (an unused parameter stays); lambda_in_unused_fn (a lambda inside an unused global function calling another global function: both functions are removed, program still compiles and runs).
+2. Run: `./test.sh` and `REMOVE_UNUSED=1 ./test.sh`. Everything in tests/ok, tests/err and tests/opt must be green both ways (every earlier program prints the same, every error text is the same, and exit values are preserved). Report both totals.
+3. tests/unit/weakref_check.py: a script (runs from the repo root, uses src/ on sys.path) that for the same tiny program measures what happens to a removed node: before the pass take `weakref.ref` of (a) a dead declaration inside an if block and (b) a dead top-level declaration; drop every strong reference you hold; run `remove_unused`; print whether each weakref is None immediately, and after `gc.collect()`. Run it once with the SemanticChecker object still alive and once after `del`-ing it (SemanticChecker.scopes[0] keeps top-level decls alive while the checker lives — verify this by measurement, do not assume it). Print its output in the report verbatim.
+4. README.md: add `--remove-unused` to the usage list (flag may appear anywhere), and a section "Optimizations" with: what the pass removes (unused variables, per declaration, iterated; unused global functions, iterated); the limits next to each other — a variable that only feeds itself (`k := k + 1`) survives, and two functions that call only each other (or a self-recursive one) survive; and the note "who frees a removed subtree" in a few lines: implementation language (Python/CPython), what its memory model does with an unreferenced node (reference counting + cyclic collector), whether nodes keep a pointer to their parent (check `src/nodes.py`; none expected) and what that would do to a reference count, and ONE measurement taken from weakref_check.py (copy the real printed result, do not invent it). Write it in plain, short sentences; the student will review and rewrite it.
+
+Acceptance: >= 6 programs in tests/opt (aim for all listed), tests/ok + tests/err + tests/opt green with and without REMOVE_UNUSED=1, weakref output reported, README section present. If any new test is red because of a compiler bug, report it and stop.
+
+Close-out: append one ai_usage.txt entry (ID P9-J4, date 2026-11-06) using this prompt verbatim; no Git commands.
+Files changed:
+- tests/opt/decl_in_if.txt/.astc/.expected (new): dead branch-local declaration disappears; the empty if block stays and the program exits with printed result 7.
+- tests/opt/kept_call_prints.txt/.astc/.expected (new): an unread declaration calls loud(), which prints 9 and returns 4; the declaration and effectful call stay, followed by printed program result 0.
+- tests/opt/nothing_removed.txt/.astc/.expected (new): both variables are read; output 5 followed by printed program result 2; no calls in unread declarations.
+- tests/opt/read_kept.txt/.astc/.expected/.in (new): unread read() initializer remains; input 23, printed program result 0.
+- tests/opt/self_feeding.txt/.astc/.expected (new): k := k + 1 retains k and its assignment; printed program result 0.
+- tests/opt/unused_assign.txt/.astc/.expected (new): unread scalar/struct declarations and y := 5 / p.x := 5 disappear; Point's field stays; printed program result 0.
+- tests/opt/capture_keeps_var.txt/.astc/.expected (new): a reachable, called lambda captures k; k stays and the lambda's result is the program's printed result 7.
+- tests/opt/callable_keeps_obj.txt/.astc/.expected (new): exit c(5) uses a Scale callable initialized with factor 3; the object stays and the printed program result is 15.
+- tests/opt/param_unused.txt/.astc/.expected (new): first(7, 99) retains both used and unused parameters; printed program result 7.
+- tests/opt/lambda_in_unused_fn.txt/.astc/.expected (new): an unused function containing a lambda calling leaf() and the global leaf() are both removed; printed program result 0.
+- tests/unit/weakref_check.py (new): SOURCE constant, measure(keep_checker) and main entry point; creates only weak references to the two measured nodes, optionally deletes the checker before optimization, then reports immediate and post-gc.collect() liveness for the same tiny program.
+- README.md: added the --remove-unused usage entry and flag-position note; appended only the Optimizations section with removal behavior, adjacent self-feeding/recursive-cycle limits, CPython ownership explanation, absent parent links, checker scope retention and one verbatim measured result.
+- ai_usage.txt: appended this P9-J4 entry, preserving earlier entries and student-review fields.
+What I did: Read the attached job text and repository instructions, verified docs/CS400_Practice_9.pdf exists and consulted TASK 3 and the additional-task effect rules. Measured both runner baselines before changes. Inspected dump() methods, checked-lambda construction/naming, optimizer traversal and checker scope lifetime. Derived all ten new .astc/.expected files by hand before comparing with the compiler. The callee in kept_call_prints really prints; callable/lambda/function results are used; nothing_removed has no unread pure-call declaration. Thus the new snapshots remain valid for the specified J5 extension. Added all ten requested cases, bringing tests/opt to 13 programs. Ran the new cases through checked-AST comparison, both compile modes and lli, with exact stdout/stderr/process-status comparison; no expectation mismatches or source bugs appeared. Measured weakref behavior in CPython, then copied one actual printed line into the README. Ran both full suites and the existing unit suite. Used SHA-256 checksums to verify source files, all pre-existing optimization fixtures, test.sh and the existing unit test file remained unchanged; checked README edits are limited to the new usage entry and Optimizations section.
+Kept from existing code (deliberately untouched): all src files, test.sh (no optimization-runner bug found), tests/unit/test_optimizer.py, all pre-existing tests/ok and tests/err fixtures and all three pre-existing optimization programs/fixtures (currently named unused_var_chain, unused_var_shadow and unused_fn_chain), and all earlier student-review records. No Git commands or metadata changes.
+Considered but NOT done / rejected (with reason): No compiler/optimizer fixes, because none were exposed and src edits are prohibited for this job. No J5 implementation or effect analysis. No rewrites of old expectations or renaming of old fixtures. No test.sh edits, dependency installation or unrelated documentation changes. Avoided unused pure-call declarations in the new fixtures except the required genuinely effectful print/read cases, so future J5 behavior does not invalidate them.
+Needed elsewhere: none
+Verification:
+- Both baselines before edits (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j4-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j4-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-baseline-flag.log
+  printf 'Baseline statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0. Each mode: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 7 passed, 0 failed; total 130 passed, 0 failed.
+- New-case validation, after writing hand-derived fixtures and before adding the README section:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j4-new-tests.py > /tmp/practice9-j4-new-tests.log 2>&1
+  rc=$?
+  cat /tmp/practice9-j4-new-tests.log
+  exit "$rc"
+  Result: status 0; all 10 new optimization programs pass byte-for-byte checked-AST comparison, both compile/run output checks, empty runtime stderr checks and exact runtime stdout/stderr/status parity. read_kept uses its .in file. No expected files were changed after observing the compiler.
+- Existing unit suite:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j4-unit.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j4-unit.log
+  exit "$rc"
+  Result: status 0; 25 passed, 0 failed. weakref_check.py is a separate measurement script, not a discovered unit test.
+- Weakref measurement from the repository root:
+  source ~/lcd/bin/activate
+  python3 tests/unit/weakref_check.py > /tmp/practice9-j4-weakref.log 2>&1
+  rc=$?
+  cat /tmp/practice9-j4-weakref.log
+  exit "$rc"
+  Result: status 0. Verbatim output:
+checker alive, immediately: block freed=True, top-level freed=False
+checker alive, after gc.collect(): block freed=True, top-level freed=False
+checker deleted, immediately: block freed=True, top-level freed=True
+checker deleted, after gc.collect(): block freed=True, top-level freed=True
+  Interpretation: the block declaration is released immediately in both runs. With the checker alive, its scopes[0] retains the removed top-level declaration even after gc.collect(). With the checker deleted before optimization, both declarations are released immediately. No extra strong node references are held by the measurement script. nodes.py has no parent links; references to declarations are separate semantic links, not parent pointers.
+- Both final runner modes (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j4-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-tests-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j4-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j4-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0. BOTH modes: existing tests/ok + tests/err 123 passed, 0 failed; optimization checks 27 passed, 0 failed (13 AST checks, 13 paired runtime/output/status checks, 1 existing .defs check); total 150 passed, 0 failed. All earlier outputs and error texts match their fixtures.
+- Protected-file and README-scope verification:
+  python3 /tmp/practice9-j4-integrity.py
+  Result: status 0; source files, original optimization fixtures, runner and existing unit tests match their pre-edit checksums; removing only the new usage entry and appended Optimizations section restores the exact original README bytes; README contains the real measurement; exactly 13 optimization programs are present.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: tests/opt/
+Changed by the student: README.md (deleted info about unit tests)
+Removed/rejected by the student: unit test (good - but not interested in realization, only in result)

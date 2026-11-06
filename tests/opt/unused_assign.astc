@@ -1,0 +1,5 @@
+Program
+  Struct Point
+    Member x i32 mut
+  Exit
+    Const 0

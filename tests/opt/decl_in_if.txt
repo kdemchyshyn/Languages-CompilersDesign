@@ -1,0 +1,5 @@
+if true
+{
+    i32 dead{42}
+}
+exit 7

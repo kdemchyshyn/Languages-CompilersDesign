@@ -1,0 +1,11 @@
+struct Scale
+{
+    i32 factor
+    fn call := (i32 v) -> i32
+    {
+        i32 r{factor * v}
+        exit r
+    }
+}
+Scale c{3}
+exit c(5)

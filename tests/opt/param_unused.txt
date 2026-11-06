@@ -1,0 +1,5 @@
+fn first := (i32 used, i32 unused) -> i32
+{
+    exit used
+}
+exit first(7, 99)
