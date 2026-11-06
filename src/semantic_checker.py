@@ -659,6 +659,8 @@ class SemanticChecker:
             node.is_this_call = False
             if node.func_name not in self.functions:
                 self.not_captured(node, node.func_name)
+                if self.lambda_stack and node.func_name == self.lambda_stack[-1][0]:
+                    self.error(node, f"lambda '{node.func_name}' cannot call itself: its name is declared after its body")
                 self.error(node, f"unknown function '{node.func_name}'")
             fn_decl = self.functions[node.func_name]
             node.fn_decl = fn_decl
@@ -675,7 +677,7 @@ class SemanticChecker:
             elif arg_type == "i32" and param.type_name == "i64":
                 node.widen_args.append(True)
             else:
-                self.error(arg, f"cannot pass {arg_type} as {param.type_name} for parameter '{param.name}'")
+                self.error(arg, f"cannot pass {arg_type} as {param.type_name} for parameter '{param.name}' of '{node.func_name}'")
                 
         node.type = fn_decl.return_type
         return node.type
@@ -735,7 +737,8 @@ class SemanticChecker:
             elif arg_type == "i32" and param.type_name == "i64":
                 node.widen_args.append(True)
             else:
-                self.error(arg, f"cannot pass {arg_type} as {param.type_name} for parameter '{param.name}'")
+                suffix = f" of object '{callee}'" if node.callable_label is not None or node.name == "call" else ""
+                self.error(arg, f"cannot pass {arg_type} as {param.type_name} for parameter '{param.name}'{suffix}")
                 
         node.fn_decl = fn_info
         node.struct_name = target_type

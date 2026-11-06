@@ -1,1 +1,1 @@
-compilation error: line 3:10: unknown function 'f'
+compilation error: line 3:10: lambda 'f' cannot call itself: its name is declared after its body
