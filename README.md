@@ -33,6 +33,8 @@ clang -fPIE output.o -o program <br>
 
 The pass removes unused variables per declaration, together with their assignments.
 It removes unused global functions too. Both removals repeat until the checked AST stops changing.
+Unused declarations and assignments with pure calls can be removed.
+Calls with printing, input, mutation, loops, recursion, or effects inherited from callees are kept.
 
 A variable that only feeds itself (`k := k + 1`) survives.
 Self-recursive functions and functions that call only each other also survive.

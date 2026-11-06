@@ -559,3 +559,127 @@ Open questions: none
 Kept as-is: optimazer.py, test_optimizer.py
 Changed by the student: none
 Removed/rejected by the student: will be removed test_optimizer.py
+
+## [P9-J5b] Additional task, part B: integrate effect analysis into unused-code removal (2026-11-06)
+Tool/model: Codex (model not exposed)
+Prompt (verbatim):
+JOB P9-J5b — Additional task, part B: integrate effect analysis into unused-code removal.
+
+Context: Practice 9, spec docs/CS400_Practice_9.pdf ("ADDITIONAL TASK — CALLS WITHOUT EFFECTS"). P9-J5a has already implemented and tested effect analysis. Ignore the Practice 8 task list in AGENTS.md, keep all its rules. Measure the baseline first (unit tests, tests/ok, tests/err, tests/opt, with and without REMOVE_UNUSED=1).
+
+ALLOWED FILES: src/optimizer.py, tests/unit/test_optimizer.py, tests/opt/fx\_\* (new files only), README.md (only one or two added lines in the existing "Optimizations" section), ai_usage.txt.\
+Do NOT edit other src files or existing tests. Existing tests/opt files must stay green UNCHANGED; if one breaks, report it (do not edit its .astc).
+
+MINIMAL CODE RULE: Write only the minimum code necessary to satisfy this job correctly. Prefer the simplest solution consistent with the existing architecture. Do not add unnecessary classes, wrappers, abstractions, duplicated logic, speculative functionality, or unrelated refactoring. Do not sacrifice correctness or required tests to reduce line count. If it is unclear whether a piece of code or behavior is actually required, STOP and ask the student before implementing it. Do not make architectural or requirement decisions on your own.
+
+Use the effect-analysis helpers from P9-J5a. Do not reimplement the call graph, fixpoint computation or effect detection unless an actual bug requires a minimal fix. If the J5a implementation is missing or incompatible, STOP and report the problem instead of building a second implementation.
+
+Implement:
+
+1. Replace `has_call_or_read(expr)` in the unused-variable counting logic with `has_effect(expr)` from P9-J5a. A declaration is kept (counted as a read of itself) / an assignment keeps its target alive only if its value has_effect. Calls with no observable effects no longer keep an otherwise unused declaration or assignment alive.
+2. Recompute the effect set at the start of EVERY optimization round (removals change the tree). Keep counting function calls in the tree exactly as it stands (calls inside declarations that are about to be removed still count in that round) — this is what produces the 4 rounds in the spec example.
+3. Reuse the existing UseCounter, Pruner, Walker and fixpoint loop. Make only the minimum changes required to connect effect analysis to the current optimization. Preserve the existing statistics and removal-order behavior.
+4. Preserve observable behavior: stdout, input reads and exit values must remain equivalent with and without `--remove-unused`. Keep every call whose effect cannot be safely ruled out. Do not introduce any additional optimization beyond the specified calls-without-effects task.
+
+TDD: write failing tests first, derive by hand. Unit tests:
+
+- The spec example (square / quiet / loud; a, b, c): round 1 removes a and b, round 2 removes quiet, round 3 removes square, round 4 stops (stats: rounds == 4, removed_decls == ["a","b"], removed_functions == ["quiet","square"]); remaining program prints 5 and exits 0.
+- Counter example: a struct with `bump` (adds 1 to a field) and `peek` (reads the field): `i32 t{c.bump()}` stays and `print(c)` still shows `Counter{n: 1}`; `i32 u{c.peek()}` is removed.
+- An effect through a chain of two calls (`relay` calls a function that prints) is kept.
+- A function with a `while` is kept; a recursive function is kept; mutually recursive functions are kept.
+- A printing lambda and a pure lambda side by side: the printing lambda's unused-result declaration is kept, the pure one's is removed; lambda structures themselves remain where still reachable.
+- A mutating callable (`[mut n]` counter) call is kept.
+
+Then add end-to-end tests tests/opt/fx_square_chain, fx_counter, fx_relay, fx_loop_and_recursion, fx_lambdas, each with .txt, .astc and .expected (hand-derived; .expected must be identical with and without the flag; add .defs where the set of defined functions is the point). Ensure programs containing loops or recursion terminate in end-to-end tests, and use a timeout to prevent hangs.
+
+Acceptance: all unit tests green; tests/opt (old + fx\_\*) green; tests/ok + tests/err green with and without REMOVE_UNUSED=1 (report totals); unchanged old tests/opt .astc files. Compare observable output and program exit values, not just successful compilation. On any discrepancy between a hand-derived expectation and the compiler, report it; do not change the expectation.
+
+Close-out: append one ai_usage.txt entry (ID P9-J5b, date 2026-11-06) using this prompt verbatim; no Git commands.
+Clarification/authorization from the student (verbatim): Allow these four unit-test source changes
+Authorization context: I identified four old retention tests whose callees were pure and whose assertions would conflict with the required additional-task behavior. Asked whether their callees could print while preserving their assertions and every existing tests/opt file. The student authorized those four source-only changes before they were made.
+Files changed:
+- src/optimizer.py: three integration lines in UseCounter only. on_program() computes self.effects = analyze_effects(node) at each round's entry; on_decl() and on_assign() use has_effect(..., self.effects). Existing call counting, statistics, pruning, fixpoint loop, Walker/children, and all J5a effect-analysis helpers unchanged.
+- tests/unit/test_optimizer.py: added OPT_DIR and mock.patch import; appended seven test_fx_* methods covering the spec's four-round order and one effect recomputation per round, bump/peek, relay, terminating loop/self/mutual recursion, pure/printing lambdas plus mutable captures and retained structures, pure assignment removal and effectful nested arguments. With explicit authorization, added print statements only to the callees in test_call_initializer_stays, test_effectful_assignment_keeps_target, test_nested_initializer_and_member_call_keep_effects, and test_field_read_and_call_target_are_visited; preserved their assertions and every other original test.
+- tests/opt/fx_square_chain.txt/.astc/.expected/.defs (new): spec program, only loud/c remaining, output 5 and program result 0, definitions main/_user_loud.
+- tests/opt/fx_counter.txt/.astc/.expected (new): bump retained, peek result removed, output Counter{n: 1} and program result 0.
+- tests/opt/fx_relay.txt/.astc/.expected (new): relay's call to a printing function retains the unused result; output 7 and program result 0.
+- tests/opt/fx_loop_and_recursion.txt/.astc/.expected/.defs (new): a loop stopping at 1, self recursion and mutual recursion decrementing n to zero; calls with unused results remain; printed program result 0; all four global functions defined.
+- tests/opt/fx_lambdas.txt/.astc/.expected/.defs (new): printing and pure lambdas plus a mutable-capture counter. Pure result b removed; printing result a and mutating result c stay; all three declared lambda structures/call methods remain. Output 5, then 2 from the second counter call, then program result 0.
+- README.md: exactly two added lines in Optimizations describing pure-call removal and retained effects.
+- ai_usage.txt: appended this P9-J5b entry; previous student-review records untouched.
+What I did: Verified the PDF and existing J5a helpers, then measured runners and units in both environment modes before edits. Identified the four old unit-source incompatibilities and obtained explicit authorization for minimal source redesign. Derived all new AST/output/definition fixtures by hand before compiler comparison. Added fixtures and seven tests before integration: 43 tests ran with four expected failures and no errors; all original 36 tests still passed at that point. Verified all five unflagged programs compile, terminate within ten-second subprocess timeouts and match hand-derived output. Then made the three-line UseCounter integration and the four authorized callee-print insertions. Effects are recomputed in on_program() each time the existing loop creates/visits a new counter; call counts still include all current-tree calls before pruning. The spec test verifies four analysis calls, four rounds, declaration removal order ['a', 'b'] and function removal order ['quiet', 'square']. Verified all old/new ASTs and definition-name lists, both full runners, both unit modes, and exact runtime stdout/stderr/status parity on all 73 tests/ok + tests/opt programs. Added per-subprocess ten-second timeouts and outer 180-second runner timeouts without editing test.sh. Verified source and documentation scope with stored checksums and textual comparisons.
+Kept from existing code (deliberately untouched): all other src files; all J5a helper implementations (_call_key/analyze_effects/has_effect); the complete remove_unused fixpoint loop and statistics code; Pruner, Walker, children and global-call counting; the unused legacy has_call_or_read helper; test.sh; every old tests/opt file, including .astc/.expected/.defs; tests/ok and tests/err; all original unit assertions; all prior ai_usage.txt review records.
+Considered but NOT done / rejected (with reason): No second effect-analysis implementation or fixes to J5a (helpers were compatible and tests exposed no analysis bug). No additional optimizations such as lambda/member removal, expression simplification or recursion/loop elimination. No rewriting old optimized snapshots. The four old unit callees were made genuinely effectful only after explicit student authorization; no old assertion was changed to hide a compiler bug. No runner edits, dependency installation, unrelated README changes or Git commands/metadata changes. No mismatch between any new hand-derived fixture and the integrated compiler occurred.
+Needed elsewhere: none
+Verification:
+- Baselines before edits, both runners and both unit environment modes (exact command):
+  source ~/lcd/bin/activate
+  set -o pipefail
+  ./test.sh > /tmp/practice9-j5b-baseline-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-baseline-default.log
+  REMOVE_UNUSED=1 ./test.sh > /tmp/practice9-j5b-baseline-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-baseline-flag.log
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-baseline-unit.log 2>&1
+  unit_rc=$?
+  tail -n 5 /tmp/practice9-j5b-baseline-unit.log
+  REMOVE_UNUSED=1 python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-baseline-unit-flag.log 2>&1
+  unit_flag_rc=$?
+  tail -n 5 /tmp/practice9-j5b-baseline-unit-flag.log
+  printf 'Baseline statuses: default=%s flagged=%s unit=%s unit_flag=%s\n' "$plain_rc" "$flag_rc" "$unit_rc" "$unit_flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ] || [ "$unit_rc" -ne 0 ] || [ "$unit_flag_rc" -ne 0 ]; then exit 1; fi
+  Result: all statuses 0; each runner: 123 existing tests passed, 27 optimization checks passed, total 150 passed, 0 failed. Each unit mode: 36 passed, 0 failed.
+- TDD red phase, new tests added before integration and before the four authorized old-test source changes:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-unit-red.log 2>&1
+  rc=$?
+  rg '^test_fx|^Ran |^FAILED|^ERROR:|compilation error:' /tmp/practice9-j5b-unit-red.log
+  exit "$rc"
+  Result: status 1; 43 tests, 39 passed, 4 failed, no errors. Expected failures: square-chain removals/statistics, peek result retained, pure lambda result retained and pure assignment retained.
+- Unflagged new fixtures before integration: inline Python subprocess assertions compiled and ran all five fx_* programs with timeout=10 on compilation and lli execution. All stdout bytes matched the previously written .expected files, stderr was empty and process status was 0. Loop/recursion terminated normally.
+- Final default unit tests:
+  source ~/lcd/bin/activate
+  python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-unit.log 2>&1
+  rc=$?
+  tail -n 8 /tmp/practice9-j5b-unit.log
+  exit "$rc"
+  Result: status 0; 43 passed, 0 failed. Spec stats exactly rounds=4, removed_decls=['a', 'b'], removed_functions=['quiet', 'square']; analyze_effects called four times. Pure assignment test removes declaration and assignment before removing the uncalled callee in round 2, stopping in round 3.
+- Final unit tests with environment flag:
+  source ~/lcd/bin/activate
+  REMOVE_UNUSED=1 python3 -m unittest discover -s tests/unit -v > /tmp/practice9-j5b-unit-flag.log 2>&1
+  rc=$?
+  tail -n 5 /tmp/practice9-j5b-unit-flag.log
+  exit "$rc"
+  Result: status 0; 43 passed, 0 failed.
+- Exact AST and definition-name verification with ten-second per-command timeouts:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5b-opt-check.py
+  Result: status 0; all 18 optimized ASTs match exactly, including every unchanged old .astc. All four .defs files match names/order from flagged LLVM output (the existing chain plus new square-chain, recursion and lambda fixtures).
+- Full runners with hang protection:
+  source ~/lcd/bin/activate
+  set -o pipefail
+  timeout 180s ./test.sh > /tmp/practice9-j5b-tests-default.log 2>&1
+  plain_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-tests-default.log
+  REMOVE_UNUSED=1 timeout 180s ./test.sh > /tmp/practice9-j5b-tests-flag.log 2>&1
+  flag_rc=$?
+  rg 'Existing tests|Optimization checks|Test Summary' /tmp/practice9-j5b-tests-flag.log
+  printf 'Runner exit statuses: default=%s flagged=%s\n' "$plain_rc" "$flag_rc"
+  if [ "$plain_rc" -ne 0 ] || [ "$flag_rc" -ne 0 ]; then exit 1; fi
+  Result: both statuses 0, no timeout. BOTH modes: tests/ok + tests/err 123 passed, 0 failed; optimization checks 40 passed, 0 failed (18 AST, 18 paired execution checks, 4 definition-name checks); total 163 passed, 0 failed. Existing error texts match their fixtures.
+- Exact observable runtime parity, ten-second compile/execution timeouts:
+  source ~/lcd/bin/activate
+  python3 /tmp/practice9-j5b-runtime-check.py > /tmp/practice9-j5b-runtime.log 2>&1
+  rc=$?
+  cat /tmp/practice9-j5b-runtime.log
+  exit "$rc"
+  Result: status 0; all 73 tests/ok + tests/opt programs compile and run with/without --remove-unused, match their expected-output convention, and have identical stdout bytes, stderr bytes and process exit values. fx_square_chain prints 5 then program result 0; fx_counter prints Counter{n: 1} then program result 0; fx_relay prints 7 then program result 0; fx_loop_and_recursion prints program result 0; fx_lambdas prints 5, 2, then program result 0. All five fx_* executions have process status 0 in both modes; input fixtures supplied when present.
+- Scope verification:
+  python3 /tmp/practice9-j5b-integrity.py
+  Result: status 0. Optimizer differs only at the three integration lines; all J5a helpers, loop, pruner, walker and other definitions identical. Existing optimization fixtures and protected files match pre-edit checksums. Only the four explicitly authorized old unit-source changes occurred; assertions and all other old test methods are unchanged, with seven new methods appended. Removing precisely the two new README lines restores its original bytes.
+Open questions: none
+--- STUDENT REVIEW (student fills after review) ---
+Kept as-is: tests/opt/.astc,.txt,.expected optimazer.py
+Changed by the student: nothing
+Removed/rejected by the student: unit tests, .defs

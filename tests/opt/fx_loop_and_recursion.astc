@@ -1,0 +1,77 @@
+Program
+  Function loop -> i32
+    Block
+      Decl n i32 mut
+        Const 0
+      While
+        BinOp !=
+          Var n
+          Const 1
+        Block
+          Assign n
+            BinOp +
+              Var n
+              Const 1
+      Exit
+        Var n
+  Function recurse -> i32
+    Param n i32
+    Block
+      Decl r i32 mut
+        Const 0
+      If
+        BinOp !=
+          Var n
+          Const 0
+        Block
+          Assign r
+            Call recurse
+              BinOp -
+                Var n
+                Const 1
+      Exit
+        Var r
+  Function first -> i32
+    Param n i32
+    Block
+      Decl r i32 mut
+        Const 0
+      If
+        BinOp !=
+          Var n
+          Const 0
+        Block
+          Assign r
+            Call second
+              BinOp -
+                Var n
+                Const 1
+      Exit
+        Var r
+  Function second -> i32
+    Param n i32
+    Block
+      Decl r i32 mut
+        Const 0
+      If
+        BinOp !=
+          Var n
+          Const 0
+        Block
+          Assign r
+            Call first
+              BinOp -
+                Var n
+                Const 1
+      Exit
+        Var r
+  Decl a i32 const
+    Call loop
+  Decl b i32 const
+    Call recurse
+      Const 2
+  Decl c i32 const
+    Call first
+      Const 2
+  Exit
+    Const 0

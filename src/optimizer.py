@@ -156,6 +156,7 @@ class UseCounter(Walker):
         return super().visit(node)
 
     def on_program(self, node):
+        self.effects = analyze_effects(node)
         self.calls = {function.name: 0 for function in node.functions}
         for child in children(node):
             self.visit(child)
@@ -170,7 +171,7 @@ class UseCounter(Walker):
     def on_decl(self, node):
         self.decls.append(node)
         self.reads.setdefault(id(node), 0)
-        if any(has_call_or_read(value) for value in node.init.values):
+        if any(has_effect(value, self.effects) for value in node.init.values):
             self.reads[id(node)] += 1
         for value in node.init.values:
             self.visit(value)
@@ -186,7 +187,7 @@ class UseCounter(Walker):
             self.visit(node.target)
 
     def on_assign(self, node):
-        if node.decl is not None and has_call_or_read(node.value):
+        if node.decl is not None and has_effect(node.value, self.effects):
             self.on_var(node)  # Keep the target of an effectful assignment.
         self.visit(node.value)
 
